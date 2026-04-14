@@ -89,7 +89,7 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
   const on = createMemo(() => store.customOn[store.tab] === true)
   const multi = createMemo(() => question()?.multiple === true)
   const count = createMemo(() => options().length + 1)
-  const picked = createMemo(() => store.answers[store.tab]?.length ?? 0)
+  const pickedCount = createMemo(() => store.answers[store.tab]?.length ?? 0)
 
   const summary = createMemo(() => {
     const n = Math.min(store.tab + 1, total())
@@ -515,7 +515,7 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
         data-slot="question-text"
         class="cursor-default"
         classList={{
-          "mb-6": store.collapsed && picked() === 0,
+          "mb-6": store.collapsed && pickedCount() === 0,
         }}
         role={store.collapsed ? "button" : undefined}
         tabIndex={store.collapsed ? 0 : undefined}
@@ -529,9 +529,9 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
       >
         {question()?.question}
       </div>
-      <Show when={store.collapsed && picked() > 0}>
+      <Show when={store.collapsed && pickedCount() > 0}>
         <div data-slot="question-hint" class="cursor-default mb-6">
-          {picked()} answer{picked() === 1 ? "" : "s"} selected
+          {pickedCount()} answer{pickedCount() === 1 ? "" : "s"} selected
         </div>
       </Show>
       <div data-slot="question-answers" hidden={store.collapsed} aria-hidden={store.collapsed}>
