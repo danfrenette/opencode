@@ -2504,7 +2504,9 @@ export default function Layout(props: ParentProps) {
             </div>
           </div>
         </div>
-        {(import.meta.env.DEV || settings.general.showDebugOverlay()) && <DebugBar />}
+        <Show when={settings.general.showDebugOverlay()}>
+          <DebugBar />
+        </Show>
       </div>
       <Toast.Region />
     </div>
