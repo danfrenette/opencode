@@ -523,7 +523,7 @@ export default function Page() {
   const [store, setStore] = createStore({
     messageId: undefined as string | undefined,
     mobileTab: "session" as "session" | "changes",
-    changes: "git" as ChangeMode,
+    changes: (settings.permissions.autoApprove() ? "git" : "turn") as ChangeMode,
     newSessionWorktree: "main",
     deferRender: false,
   })
@@ -598,6 +598,10 @@ export default function Page() {
     list.push("turn")
     return list
   })
+  const defaultChangesMode = (list: ChangeMode[]) => {
+    if (!settings.permissions.autoApprove() && list.includes("turn")) return "turn"
+    return list[0]
+  }
   const mobileChanges = createMemo(() => !isDesktop() && store.mobileTab === "changes")
   const wantsReview = createMemo(() =>
     isDesktop()
@@ -999,7 +1003,7 @@ export default function Page() {
   createEffect(() => {
     const list = changesOptions()
     if (list.includes(store.changes)) return
-    const next = list[0]
+    const next = defaultChangesMode(list)
     if (!next) return
     setStore("changes", next)
   })
