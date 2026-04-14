@@ -344,6 +344,18 @@ export const SettingsGeneral: Component = () => {
             />
           </div>
         </SettingsRow>
+
+        <SettingsRow
+          title={language.t("settings.general.row.showDebugOverlay.title")}
+          description={language.t("settings.general.row.showDebugOverlay.description")}
+        >
+          <div data-action="settings-show-debug-overlay">
+            <Switch
+              checked={settings.general.showDebugOverlay()}
+              onChange={(checked) => settings.general.setShowDebugOverlay(checked)}
+            />
+          </div>
+        </SettingsRow>
       </SettingsList>
     </div>
   )

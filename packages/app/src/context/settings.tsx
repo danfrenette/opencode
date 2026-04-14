@@ -31,6 +31,7 @@ export interface Settings {
     showReasoningSummaries: boolean
     shellToolPartsExpanded: boolean
     editToolPartsExpanded: boolean
+    showDebugOverlay: boolean
   }
   updates: {
     startup: boolean
@@ -102,6 +103,7 @@ const defaultSettings: Settings = {
     showReasoningSummaries: false,
     shellToolPartsExpanded: false,
     editToolPartsExpanded: false,
+    showDebugOverlay: false,
   },
   updates: {
     startup: true,
@@ -212,6 +214,10 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         ),
         setEditToolPartsExpanded(value: boolean) {
           setStore("general", "editToolPartsExpanded", value)
+        },
+        showDebugOverlay: withFallback(() => store.general?.showDebugOverlay, defaultSettings.general.showDebugOverlay),
+        setShowDebugOverlay(value: boolean) {
+          setStore("general", "showDebugOverlay", value)
         },
       },
       updates: {

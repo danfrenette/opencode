@@ -6,9 +6,9 @@
     },
   },
   "permission": {
-    "edit": {
-      "packages/opencode/migration/*": "deny",
-    },
+    "edit": "ask",
+    "write": "ask", 
+    "apply_patch": "ask",
   },
   "mcp": {},
   "tools": {

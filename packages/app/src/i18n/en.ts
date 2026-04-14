@@ -753,6 +753,8 @@ export const dict = {
   "settings.general.row.showTerminal.description": "Show the terminal button in the desktop title bar",
   "settings.general.row.showStatus.title": "Server status",
   "settings.general.row.showStatus.description": "Show the server status button in the desktop title bar",
+  "settings.general.row.showDebugOverlay.title": "Debug overlay",
+  "settings.general.row.showDebugOverlay.description": "Show performance metrics debug overlay (FPS, memory, etc.)",
   "settings.general.row.reasoningSummaries.title": "Show reasoning summaries",
   "settings.general.row.reasoningSummaries.description": "Display model reasoning summaries in the timeline",
   "settings.general.row.shellToolPartsExpanded.title": "Expand shell tool parts",
