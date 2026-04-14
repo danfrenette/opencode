@@ -126,6 +126,7 @@ type ViewerConfig = {
   selectedLines: () => SelectedLineRange | null | undefined
   commentedLines: () => SelectedLineRange[]
   onLineSelectionEnd: (range: SelectedLineRange | null) => void
+  onLineNumberSelectionEnd?: (range: SelectedLineRange | null) => void
 
   // mode-specific callbacks
   lineFromMouseEvent: (event: MouseEvent) => MouseHit
@@ -194,24 +195,33 @@ function useFileViewer(config: ViewerConfig) {
     if (event.button !== 0) return
 
     const hit = config.lineFromMouseEvent(event)
-    if (hit.numberColumn) {
-      bridge.begin(true, hit.line)
-      return
-    }
     if (hit.line === undefined) return
 
-    bridge.begin(false, hit.line)
     dragStart = hit.line
     dragEnd = hit.line
     dragMoved = false
     config.onDragStart(hit)
+
+    if (hit.numberColumn) {
+      bridge.begin(true, hit.line)
+      return
+    }
+
+    bridge.begin(false, hit.line)
   }
 
   const handleMouseMove = (event: MouseEvent) => {
     if (!config.enableLineSelection()) return
 
     const hit = config.lineFromMouseEvent(event)
-    if (bridge.track(event.buttons, hit.line)) return
+    if (bridge.track(event.buttons, hit.line)) {
+      if (dragStart === undefined || hit.line === undefined) return
+      dragEnd = hit.line
+      dragMoved = dragMoved || hit.line !== dragStart
+      config.onDragMove(hit)
+      scheduleDragUpdate()
+      return
+    }
     if (dragStart === undefined) return
 
     if ((event.buttons & 1) === 0) {
@@ -232,7 +242,7 @@ function useFileViewer(config: ViewerConfig) {
 
   const handleMouseUp = () => {
     if (!config.enableLineSelection()) return
-    if (bridge.finish() === "numbers") return
+    const pointer = bridge.finish()
     if (dragStart === undefined) return
 
     if (!dragMoved) {
@@ -240,6 +250,7 @@ function useFileViewer(config: ViewerConfig) {
       const selected = config.buildClickSelection()
       if (selected) config.setSelectedLines(selected)
       config.onLineSelectionEnd(lastSelection)
+      if (pointer.mode === "numbers") config.onLineNumberSelectionEnd?.(lastSelection)
       dragStart = undefined
       dragEnd = undefined
       dragMoved = false
@@ -354,13 +365,17 @@ function useFileViewer(config: ViewerConfig) {
 
 type Viewer = ReturnType<typeof useFileViewer>
 
-type ModeAdapter = Omit<ViewerConfig, "enableLineSelection" | "selectedLines" | "commentedLines" | "onLineSelectionEnd">
+type ModeAdapter = Omit<
+  ViewerConfig,
+  "enableLineSelection" | "selectedLines" | "commentedLines" | "onLineSelectionEnd" | "onLineNumberSelectionEnd"
+>
 
 type ModeConfig = {
   enableLineSelection: () => boolean
   selectedLines: () => SelectedLineRange | null | undefined
   commentedLines: () => SelectedLineRange[] | undefined
   onLineSelectionEnd: (range: SelectedLineRange | null) => void
+  onLineNumberSelectionEnd?: (range: SelectedLineRange | null) => void
 }
 
 type RenderTarget = {
@@ -378,6 +393,7 @@ function useModeViewer(config: ModeConfig, adapter: ModeAdapter) {
     selectedLines: config.selectedLines,
     commentedLines: () => config.commentedLines() ?? [],
     onLineSelectionEnd: config.onLineSelectionEnd,
+    onLineNumberSelectionEnd: config.onLineNumberSelectionEnd,
     ...adapter,
   })
 }
@@ -714,6 +730,7 @@ function TextViewer<T>(props: TextFileProps<T>) {
       selectedLines: () => local.selectedLines,
       commentedLines: () => local.commentedLines,
       onLineSelectionEnd: (range) => local.onLineSelectionEnd?.(range),
+      onLineNumberSelectionEnd: (range) => local.onLineNumberSelectionEnd?.(range),
     },
     adapter,
   )
@@ -875,6 +892,7 @@ function DiffViewer<T>(props: DiffFileProps<T>) {
       selectedLines: () => local.selectedLines,
       commentedLines: () => local.commentedLines,
       onLineSelectionEnd: (range) => local.onLineSelectionEnd?.(range),
+      onLineNumberSelectionEnd: (range) => local.onLineNumberSelectionEnd?.(range),
     },
     adapter,
   )
@@ -913,7 +931,7 @@ function DiffViewer<T>(props: DiffFileProps<T>) {
     }
 
     const perf = large() ? { ...base, ...largeOptions } : base
-    if (!mobile()) return perf
+    if (!mobile() || props.enableLineSelection === true) return perf
     return { ...perf, disableLineNumbers: true }
   })
 

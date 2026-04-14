@@ -130,7 +130,12 @@ const showRequestError = (language: ReturnType<typeof useLanguage>, err: unknown
   })
 }
 
-export function SessionHeader() {
+export function SessionHeader(props: {
+  mobileTab?: "session" | "changes"
+  onMobileTabChange?: (tab: "session" | "changes") => void
+  hasReview?: boolean
+  reviewCount?: number
+}) {
   const layout = useLayout()
   const command = useCommand()
   const server = useServer()
@@ -424,6 +429,28 @@ export function SessionHeader() {
                 </div>
               </Show>
               <div class="flex items-center gap-1">
+                <Show when={props.mobileTab && props.onMobileTabChange}>
+                  <Button
+                    variant="ghost"
+                    size="small"
+                    class="xl:hidden h-7 px-2.5 shadow-none border-none shrink-0"
+                    onClick={() => props.onMobileTabChange?.(props.mobileTab === "session" ? "changes" : "session")}
+                    aria-label={
+                      props.mobileTab === "session"
+                        ? language.t("session.review.change.other")
+                        : language.t("session.tab.session")
+                    }
+                  >
+                    <Icon
+                      name={props.mobileTab === "session" ? "arrow-right" : "arrow-left"}
+                      size="small"
+                      class="text-icon-weak mr-1"
+                    />
+                    {props.mobileTab === "session"
+                      ? language.t("session.review.change.other")
+                      : language.t("session.tab.session")}
+                  </Button>
+                </Show>
                 <Show when={status()}>
                   <Tooltip placement="bottom" value={language.t("status.popover.trigger")}>
                     <StatusPopover />
