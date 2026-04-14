@@ -59,6 +59,7 @@ import { useSessionLayout } from "@/pages/session/session-layout"
 import { syncSessionModel } from "@/pages/session/session-model-helpers"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
+import { resolveSessionReviewDiffs } from "@/pages/session/permission/session-permission-diffs"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
 import { Identifier } from "@/utils/id"
@@ -363,76 +364,6 @@ export default function Page() {
   const composer = createSessionComposerState()
   const permission = usePermission()
 
-  const pendingPermissionDiffs = createMemo((): VcsFileDiff[] => {
-    const id = params.id
-    if (!id) return []
-    const req = sessionPermissionRequest(sync.data.session, sync.data.permission, id)
-    if (!req?.metadata) return []
-
-    const meta = req.metadata as {
-      filepath?: string
-      diff?: string
-      filediff?: {
-        file?: string
-        filePath?: string
-        relativePath?: string
-        patch?: string
-        diff?: string
-        additions?: number
-        deletions?: number
-        type?: string
-      }
-      files?: Array<{
-        file?: string
-        filePath?: string
-        relativePath?: string
-        patch?: string
-        diff?: string
-        additions?: number
-        deletions?: number
-        type?: string
-      }>
-    }
-
-    if (meta.files?.length) {
-      return meta.files.map(
-        (f): VcsFileDiff => ({
-          file: f.file || f.filePath || f.relativePath || "",
-          patch: f.patch || f.diff || "",
-          additions: f.additions || 0,
-          deletions: f.deletions || 0,
-          status: f.type === "add" ? "added" : f.type === "delete" ? "deleted" : "modified",
-        }),
-      )
-    }
-
-    if (meta.filediff) {
-      return [
-        {
-          file: meta.filediff.file || meta.filediff.filePath || meta.filediff.relativePath || "",
-          patch: meta.filediff.patch || meta.filediff.diff || "",
-          additions: meta.filediff.additions || 0,
-          deletions: meta.filediff.deletions || 0,
-          status: meta.filediff.type === "add" ? "added" : meta.filediff.type === "delete" ? "deleted" : "modified",
-        },
-      ]
-    }
-
-    if (meta.diff && meta.filepath) {
-      return [
-        {
-          file: meta.filepath,
-          patch: meta.diff,
-          additions: 0,
-          deletions: 0,
-          status: "modified",
-        },
-      ]
-    }
-
-    return []
-  })
-
   const workspaceKey = createMemo(() => params.dir ?? "")
   const workspaceTabs = createMemo(() => layout.tabs(workspaceKey))
 
@@ -645,9 +576,12 @@ export default function Page() {
   }, desktopReviewOpen())
 
   const turnDiffs = createMemo(() => {
-    const completed = list(lastUserMessage()?.summary?.diffs)
-    if (completed.length > 0) return completed
-    return pendingPermissionDiffs()
+    return resolveSessionReviewDiffs({
+      completed: list(lastUserMessage()?.summary?.diffs),
+      session: sync.data.session,
+      permission: sync.data.permission,
+      sessionID: params.id,
+    })
   })
   const nogit = createMemo(() => !!sync.project && sync.project.vcs !== "git")
   const changesOptions = createMemo<ChangeMode[]>(() => {
