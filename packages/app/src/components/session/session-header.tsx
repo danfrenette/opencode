@@ -6,6 +6,7 @@ import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Keybind } from "@opencode-ai/ui/keybind"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { showToast } from "@opencode-ai/ui/toast"
+import { Tabs } from "@opencode-ai/ui/tabs"
 import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { getFilename } from "@opencode-ai/util/path"
 import { createEffect, createMemo, For, onCleanup, Show } from "solid-js"
@@ -21,7 +22,7 @@ import { useSync } from "@/context/sync"
 import { useTerminal } from "@/context/terminal"
 import { SessionAutoAcceptToggle } from "@/pages/session/permission/session-auto-accept-toggle"
 import { focusTerminalById } from "@/pages/session/helpers"
-import { useSessionLayout } from "@/pages/session/session-layout"
+import { useSessionLayout, useSessionViewportMode } from "@/pages/session/session-layout"
 import { messageAgentColor } from "@/utils/agent"
 import { decode64 } from "@/utils/base64"
 import { Persist, persisted } from "@/utils/persist"
@@ -130,7 +131,15 @@ const showRequestError = (language: ReturnType<typeof useLanguage>, err: unknown
   })
 }
 
-export function SessionHeader() {
+type SessionHeaderProps = {
+  viewportMode?: import("@/pages/session/session-layout").SessionViewportMode
+  mobileTab?: "session" | "changes"
+  onMobileTabChange?: (tab: "session" | "changes") => void
+  hasReview?: boolean
+  reviewCount?: number
+}
+
+export function SessionHeader(props: SessionHeaderProps) {
   const layout = useLayout()
   const command = useCommand()
   const server = useServer()
@@ -140,6 +149,9 @@ export function SessionHeader() {
   const sync = useSync()
   const terminal = useTerminal()
   const { params, view } = useSessionLayout()
+  const localViewportMode = useSessionViewportMode()
+  const isDesktopLandscape = createMemo(() => (props.viewportMode ?? localViewportMode()) === "desktop-landscape")
+  const isStacked = createMemo(() => !isDesktopLandscape())
 
   const projectDirectory = createMemo(() => decode64(params.dir) ?? "")
   const project = createMemo(() => {
@@ -269,11 +281,58 @@ export function SessionHeader() {
       .catch((err: unknown) => showRequestError(language, err))
   }
 
+  const leftMount = createMemo(() => document.getElementById("opencode-titlebar-left"))
   const centerMount = createMemo(() => document.getElementById("opencode-titlebar-center"))
   const rightMount = createMemo(() => document.getElementById("opencode-titlebar-right"))
 
   return (
     <>
+      {/* Inline view toggle for stacked mode (iPad portrait / mobile) */}
+      <Show when={isStacked() && props.onMobileTabChange && leftMount()}>
+        {(mount) => (
+          <Portal mount={mount()}>
+            <div class="flex items-center gap-2">
+              <Tooltip
+                placement="bottom"
+                value={
+                  props.mobileTab === "session"
+                    ? language.t("session.switchToChanges")
+                    : language.t("session.switchToSession")
+                }
+              >
+                <Button
+                  variant="ghost"
+                  class="size-11 p-0 rounded-lg flex items-center justify-center"
+                  classList={{
+                    "bg-surface-raised-base-active": props.mobileTab === "changes",
+                  }}
+                  onClick={() => props.onMobileTabChange?.(props.mobileTab === "session" ? "changes" : "session")}
+                  aria-label={
+                    props.mobileTab === "session"
+                      ? language.t("session.switchToChanges")
+                      : language.t("session.switchToSession")
+                  }
+                >
+                  <Show
+                    when={props.mobileTab === "changes"}
+                    fallback={<Icon name="sidebar" size="large" class="text-icon-base" />}
+                  >
+                    <div class="relative">
+                      <Icon name="review" size="large" class="text-icon-strong" />
+                      <Show when={props.hasReview && props.reviewCount && props.reviewCount > 0}>
+                        <span class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-icon-interactive-base text-background-base text-11-medium flex items-center justify-center">
+                          {(props.reviewCount ?? 0) > 99 ? "99+" : props.reviewCount}
+                        </span>
+                      </Show>
+                    </div>
+                  </Show>
+                </Button>
+              </Tooltip>
+            </div>
+          </Portal>
+        )}
+      </Show>
+
       <Show when={search()}>
         <Show when={centerMount()}>
           {(mount) => (
@@ -448,50 +507,52 @@ export function SessionHeader() {
                   </TooltipKeybind>
                 </Show>
 
-                <div class="hidden md:flex items-center gap-1 shrink-0">
-                  <TooltipKeybind
-                    title={language.t("command.review.toggle")}
-                    keybind={command.keybind("review.toggle")}
-                  >
-                    <Button
-                      variant="ghost"
-                      class="group/review-toggle titlebar-icon w-8 h-6 p-0 box-border"
-                      onClick={() => view().reviewPanel.toggle()}
-                      aria-label={language.t("command.review.toggle")}
-                      aria-expanded={view().reviewPanel.opened()}
-                      aria-controls="review-panel"
-                    >
-                      <Icon size="small" name={view().reviewPanel.opened() ? "review-active" : "review"} />
-                    </Button>
-                  </TooltipKeybind>
-
-                  <Show when={tree()}>
+                <Show when={isDesktopLandscape()}>
+                  <div class="hidden md:flex items-center gap-1 shrink-0">
                     <TooltipKeybind
-                      title={language.t("command.fileTree.toggle")}
-                      keybind={command.keybind("fileTree.toggle")}
+                      title={language.t("command.review.toggle")}
+                      keybind={command.keybind("review.toggle")}
                     >
                       <Button
                         variant="ghost"
-                        class="titlebar-icon w-8 h-6 p-0 box-border"
-                        onClick={() => layout.fileTree.toggle()}
-                        aria-label={language.t("command.fileTree.toggle")}
-                        aria-expanded={layout.fileTree.opened()}
-                        aria-controls="file-tree-panel"
+                        class="group/review-toggle titlebar-icon w-8 h-6 p-0 box-border"
+                        onClick={() => view().reviewPanel.toggle()}
+                        aria-label={language.t("command.review.toggle")}
+                        aria-expanded={view().reviewPanel.opened()}
+                        aria-controls="review-panel"
                       >
-                        <div class="relative flex items-center justify-center size-4">
-                          <Icon
-                            size="small"
-                            name={layout.fileTree.opened() ? "file-tree-active" : "file-tree"}
-                            classList={{
-                              "text-icon-strong": layout.fileTree.opened(),
-                              "text-icon-weak": !layout.fileTree.opened(),
-                            }}
-                          />
-                        </div>
+                        <Icon size="small" name={view().reviewPanel.opened() ? "review-active" : "review"} />
                       </Button>
                     </TooltipKeybind>
-                  </Show>
-                </div>
+
+                    <Show when={tree()}>
+                      <TooltipKeybind
+                        title={language.t("command.fileTree.toggle")}
+                        keybind={command.keybind("fileTree.toggle")}
+                      >
+                        <Button
+                          variant="ghost"
+                          class="titlebar-icon w-8 h-6 p-0 box-border"
+                          onClick={() => layout.fileTree.toggle()}
+                          aria-label={language.t("command.fileTree.toggle")}
+                          aria-expanded={layout.fileTree.opened()}
+                          aria-controls="file-tree-panel"
+                        >
+                          <div class="relative flex items-center justify-center size-4">
+                            <Icon
+                              size="small"
+                              name={layout.fileTree.opened() ? "file-tree-active" : "file-tree"}
+                              classList={{
+                                "text-icon-strong": layout.fileTree.opened(),
+                                "text-icon-weak": !layout.fileTree.opened(),
+                              }}
+                            />
+                          </div>
+                        </Button>
+                      </TooltipKeybind>
+                    </Show>
+                  </div>
+                </Show>
               </div>
             </div>
           </Portal>

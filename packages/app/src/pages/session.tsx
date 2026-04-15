@@ -55,7 +55,7 @@ import {
 } from "@/pages/session/helpers"
 import { MessageTimeline } from "@/pages/session/message-timeline"
 import { type DiffStyle, SessionReviewTab, type SessionReviewTabProps } from "@/pages/session/review-tab"
-import { useSessionLayout } from "@/pages/session/session-layout"
+import { useSessionLayout, useSessionViewportMode } from "@/pages/session/session-layout"
 import { syncSessionModel } from "@/pages/session/session-model-helpers"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
@@ -403,17 +403,18 @@ export default function Page() {
     ),
   )
 
-  const isDesktop = createMediaQuery("(min-width: 768px)")
+  const viewportMode = useSessionViewportMode()
+  const isDesktopLandscape = createMemo(() => viewportMode() === "desktop-landscape")
   const size = createSizing()
-  const desktopReviewOpen = createMemo(() => isDesktop() && view().reviewPanel.opened())
-  const desktopFileTreeOpen = createMemo(() => isDesktop() && layout.fileTree.opened())
+  const desktopReviewOpen = createMemo(() => isDesktopLandscape() && view().reviewPanel.opened())
+  const desktopFileTreeOpen = createMemo(() => isDesktopLandscape() && layout.fileTree.opened())
   const desktopSidePanelOpen = createMemo(() => desktopReviewOpen() || desktopFileTreeOpen())
   const sessionPanelWidth = createMemo(() => {
     if (!desktopSidePanelOpen()) return "100%"
     if (desktopReviewOpen()) return `${layout.session.width()}px`
     return `calc(100% - ${layout.fileTree.width()}px)`
   })
-  const centered = createMemo(() => isDesktop() && !desktopReviewOpen())
+  const centered = createMemo(() => isDesktopLandscape() && !desktopReviewOpen())
 
   function normalizeTab(tab: string) {
     if (!tab.startsWith("file://")) return tab
@@ -442,7 +443,7 @@ export default function Page() {
   const sessionCount = createMemo(() => Math.max(info()?.summary?.files ?? 0, diffs().length))
   const hasSessionReview = createMemo(() => sessionCount() > 0)
   const canReview = createMemo(() => !!sync.project)
-  const reviewTab = createMemo(() => isDesktop())
+  const reviewTab = createMemo(() => isDesktopLandscape())
   const tabState = createSessionTabs({
     tabs,
     pathFromTab: file.pathFromTab,
@@ -602,9 +603,9 @@ export default function Page() {
     if (!settings.permissions.autoApprove() && list.includes("turn")) return "turn"
     return list[0]
   }
-  const mobileChanges = createMemo(() => !isDesktop() && store.mobileTab === "changes")
+  const mobileChanges = createMemo(() => !isDesktopLandscape() && store.mobileTab === "changes")
   const wantsReview = createMemo(() =>
-    isDesktop()
+    isDesktopLandscape()
       ? desktopFileTreeOpen() || (desktopReviewOpen() && activeTab() === "review")
       : store.mobileTab === "changes",
   )
@@ -1317,7 +1318,7 @@ export default function Page() {
   let treeDir: string | undefined
   createEffect(() => {
     const dir = sdk.directory
-    if (!isDesktop()) return
+    if (!isDesktopLandscape()) return
     if (!layout.fileTree.opened()) return
     if (sync.status === "loading") return
 
@@ -1814,33 +1815,14 @@ export default function Page() {
 
   return (
     <div class="relative bg-background-base size-full overflow-hidden flex flex-col">
-      <SessionHeader />
-      <div class="flex-1 min-h-0 flex flex-col md:flex-row">
-        <Show when={!isDesktop() && !!params.id}>
-          <Tabs value={store.mobileTab} class="h-auto">
-            <Tabs.List>
-              <Tabs.Trigger
-                value="session"
-                class="!w-1/2 !max-w-none"
-                classes={{ button: "w-full" }}
-                onClick={() => setStore("mobileTab", "session")}
-              >
-                {language.t("session.tab.session")}
-              </Tabs.Trigger>
-              <Tabs.Trigger
-                value="changes"
-                class="!w-1/2 !max-w-none !border-r-0"
-                classes={{ button: "w-full" }}
-                onClick={() => setStore("mobileTab", "changes")}
-              >
-                {hasReview()
-                  ? language.t("session.review.filesChanged", { count: reviewCount() })
-                  : language.t("session.review.change.other")}
-              </Tabs.Trigger>
-            </Tabs.List>
-          </Tabs>
-        </Show>
-
+      <SessionHeader
+        viewportMode={viewportMode()}
+        mobileTab={store.mobileTab}
+        onMobileTabChange={(tab) => setStore("mobileTab", tab)}
+        hasReview={hasReview()}
+        reviewCount={reviewCount()}
+      />
+      <div class="flex-1 min-h-0 flex flex-col lg:flex-row">
         {/* Session panel */}
         <div
           classList={{
