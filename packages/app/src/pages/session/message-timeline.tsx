@@ -264,7 +264,32 @@ export function MessageTimeline(props: {
 
   const [timeoutDone, setTimeoutDone] = createSignal(true)
 
+  // Defensive: detect stale busy status (stuck loading bar) and auto-hide after 30s
+  const [statusStaleSince, setStatusStaleSince] = createSignal<number | null>(null)
+  const STALE_STATUS_THRESHOLD = 30_000 // 30 seconds
+
+  createEffect(() => {
+    const status = sessionStatus()
+    const now = Date.now()
+
+    if (status.type !== "idle") {
+      // Status is busy - start tracking if not already
+      setStatusStaleSince((prev) => prev ?? now)
+    } else {
+      // Status is idle - clear tracking
+      setStatusStaleSince(null)
+    }
+  })
+
+  const isStatusStale = createMemo(() => {
+    const since = statusStaleSince()
+    if (!since) return false
+    return Date.now() - since > STALE_STATUS_THRESHOLD
+  })
+
   const workingStatus = createMemo<"hidden" | "showing" | "hiding">((prev) => {
+    // Force hide if status has been stuck busy for too long
+    if (isStatusStale()) return "hidden"
     if (working()) return "showing"
     if (prev === "showing" || !timeoutDone()) return "hiding"
     return "hidden"
