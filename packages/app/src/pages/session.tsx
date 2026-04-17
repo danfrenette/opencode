@@ -1815,13 +1815,7 @@ export default function Page() {
 
   return (
     <div class="relative bg-background-base size-full overflow-hidden flex flex-col">
-      <SessionHeader
-        viewportMode={viewportMode()}
-        mobileTab={store.mobileTab}
-        onMobileTabChange={(tab) => setStore("mobileTab", tab)}
-        hasReview={hasReview()}
-        reviewCount={reviewCount()}
-      />
+      <SessionHeader />
       <div class="flex-1 min-h-0 flex flex-col lg:flex-row">
         {/* Session panel */}
         <div
@@ -1934,6 +1928,11 @@ export default function Page() {
             setPromptDockRef={(el) => {
               promptDock = el
             }}
+            viewportMode={viewportMode()}
+            mobileTab={store.mobileTab}
+            onMobileTabChange={(tab) => setStore("mobileTab", tab)}
+            hasReview={hasReview()}
+            reviewCount={reviewCount()}
           />
 
           <Show when={desktopReviewOpen()}>

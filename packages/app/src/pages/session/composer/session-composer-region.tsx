@@ -16,6 +16,7 @@ import type { SessionComposerState } from "@/pages/session/composer/session-comp
 import { SessionTodoDock } from "@/pages/session/composer/session-todo-dock"
 import type { FollowupDraft } from "@/components/prompt-input/submit"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
+import type { SessionViewportMode } from "@/pages/session/session-layout"
 
 export function SessionComposerRegion(props: {
   state: SessionComposerState
@@ -44,6 +45,11 @@ export function SessionComposerRegion(props: {
     onRestore: (id: string) => void
   }
   setPromptDockRef: (el: HTMLDivElement) => void
+  viewportMode?: SessionViewportMode
+  mobileTab?: "session" | "changes"
+  onMobileTabChange?: (tab: "session" | "changes") => void
+  hasReview?: boolean
+  reviewCount?: number
 }) {
   const navigate = useNavigate()
   const prompt = usePrompt()
@@ -260,6 +266,11 @@ export function SessionComposerRegion(props: {
                       onQueue={props.followup?.onQueue}
                       onAbort={props.followup?.onAbort}
                       onSubmit={props.onSubmit}
+                      viewportMode={props.viewportMode}
+                      mobileTab={props.mobileTab}
+                      onMobileTabChange={props.onMobileTabChange}
+                      hasReview={props.hasReview}
+                      reviewCount={props.reviewCount}
                     />
                   </Show>
                 }

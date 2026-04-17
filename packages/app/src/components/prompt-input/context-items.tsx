@@ -1,4 +1,4 @@
-import { Component, For, Show } from "solid-js"
+import { Component, createMemo, For, Show } from "solid-js"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
@@ -13,9 +13,16 @@ type ContextItemsProps = {
   openComment: (item: PromptContextItem) => void
   remove: (item: PromptContextItem) => void
   t: (key: string) => string
+  viewportMode?: "desktop-landscape" | "stacked"
 }
 
 export const PromptContextItems: Component<ContextItemsProps> = (props) => {
+  const isStacked = createMemo(() => props.viewportMode === "stacked")
+  const removeButtonClass = createMemo(() =>
+    isStacked()
+      ? "ml-auto size-6 text-text-weak hover:text-text-strong transition-all"
+      : "ml-auto size-3.5 text-text-weak hover:text-text-strong transition-all",
+  )
   return (
     <Show when={props.items.length > 0}>
       <div class="flex flex-nowrap items-start gap-2 p-2 overflow-x-auto no-scrollbar">
@@ -66,7 +73,7 @@ export const PromptContextItems: Component<ContextItemsProps> = (props) => {
                       type="button"
                       icon="close-small"
                       variant="ghost"
-                      class="ml-auto size-3.5 text-text-weak hover:text-text-strong transition-all"
+                      class={removeButtonClass()}
                       onClick={(e) => {
                         e.stopPropagation()
                         props.remove(item)

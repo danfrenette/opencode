@@ -1,4 +1,4 @@
-import { Component, For, Show } from "solid-js"
+import { Component, createMemo, For, Show } from "solid-js"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import type { ImageAttachmentPart } from "@/context/prompt"
@@ -8,16 +8,30 @@ type PromptImageAttachmentsProps = {
   onOpen: (attachment: ImageAttachmentPart) => void
   onRemove: (id: string) => void
   removeLabel: string
+  viewportMode?: "desktop-landscape" | "stacked"
 }
 
 const fallbackClass = "size-16 rounded-md bg-surface-base flex items-center justify-center border border-border-base"
 const imageClass =
   "size-16 rounded-md object-cover border border-border-base hover:border-border-strong-base transition-colors"
-const removeClass =
-  "absolute -top-1.5 -right-1.5 size-5 rounded-full bg-surface-raised-stronger-non-alpha border border-border-base flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface-raised-base-hover"
 const nameClass = "absolute bottom-0 left-0 right-0 px-1 py-0.5 bg-black/50 rounded-b-md"
 
 export const PromptImageAttachments: Component<PromptImageAttachmentsProps> = (props) => {
+  const isStacked = createMemo(() => props.viewportMode === "stacked")
+
+  const removeClass = createMemo(() => {
+    // Mobile: always visible, larger touch target
+    // Desktop: hover-only, smaller
+    const baseClass =
+      "absolute rounded-full bg-surface-raised-stronger-non-alpha border border-border-base flex items-center justify-center transition-opacity hover:bg-surface-raised-base-hover"
+    if (isStacked()) {
+      return `${baseClass} -top-2 -right-2 size-6 opacity-100`
+    }
+    return `${baseClass} -top-1.5 -right-1.5 size-5 opacity-0 group-hover:opacity-100`
+  })
+
+  const removeIconClass = createMemo(() => (isStacked() ? "size-4 text-text-weak" : "size-3 text-text-weak"))
+
   return (
     <Show when={props.attachments.length > 0}>
       <div class="flex flex-wrap gap-2 px-3 pt-3">
@@ -43,10 +57,10 @@ export const PromptImageAttachments: Component<PromptImageAttachmentsProps> = (p
                 <button
                   type="button"
                   onClick={() => props.onRemove(attachment.id)}
-                  class={removeClass}
+                  class={removeClass()}
                   aria-label={props.removeLabel}
                 >
-                  <Icon name="close" class="size-3 text-text-weak" />
+                  <Icon name="close" class={removeIconClass()} />
                 </button>
                 <div class={nameClass}>
                   <span class="text-10-regular text-white truncate block">{attachment.filename}</span>

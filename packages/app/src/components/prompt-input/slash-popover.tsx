@@ -1,4 +1,4 @@
-import { Component, For, Match, Show, Switch } from "solid-js"
+import { Component, createMemo, For, Match, Show, Switch } from "solid-js"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { Icon } from "@opencode-ai/ui/icon"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
@@ -31,9 +31,14 @@ type PromptPopoverProps = {
   onSlashSelect: (item: SlashCommand) => void
   commandKeybind: (id: string) => string | undefined
   t: (key: string) => string
+  viewportMode?: "desktop-landscape" | "stacked"
 }
 
 export const PromptPopover: Component<PromptPopoverProps> = (props) => {
+  const isStacked = createMemo(() => props.viewportMode === "stacked")
+  // Mobile: larger touch targets with more padding
+  const rowPadding = createMemo(() => (isStacked() ? "py-2" : "py-0.5"))
+  const slashRowPadding = createMemo(() => (isStacked() ? "py-1.5" : "py-1"))
   return (
     <Show when={props.popover}>
       <div
@@ -58,12 +63,16 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
                   if (item.type === "agent") {
                     return (
                       <button
-                        class="w-full flex items-center gap-x-2 rounded-md px-2 py-0.5"
-                        classList={{ "bg-surface-raised-base-hover": props.atActive === key }}
+                        class="w-full flex items-center gap-x-2 rounded-md px-2"
+                        classList={{ "bg-surface-raised-base-hover": props.atActive === key, [rowPadding()]: true }}
                         onClick={() => props.onAtSelect(item)}
                         onMouseEnter={() => props.setAtActive(key)}
                       >
-                        <Icon name="brain" size="small" class="text-icon-info-active shrink-0" />
+                        <Icon
+                          name="brain"
+                          size={isStacked() ? "normal" : "small"}
+                          class="text-icon-info-active shrink-0"
+                        />
                         <span class="text-14-regular text-text-strong whitespace-nowrap">@{item.name}</span>
                       </button>
                     )
@@ -75,12 +84,15 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
 
                   return (
                     <button
-                      class="w-full flex items-center gap-x-2 rounded-md px-2 py-0.5"
-                      classList={{ "bg-surface-raised-base-hover": props.atActive === key }}
+                      class="w-full flex items-center gap-x-2 rounded-md px-2"
+                      classList={{ "bg-surface-raised-base-hover": props.atActive === key, [rowPadding()]: true }}
                       onClick={() => props.onAtSelect(item)}
                       onMouseEnter={() => props.setAtActive(key)}
                     >
-                      <FileIcon node={{ path: item.path, type: "file" }} class="shrink-0 size-4" />
+                      <FileIcon
+                        node={{ path: item.path, type: "file" }}
+                        class={isStacked() ? "shrink-0 size-5" : "shrink-0 size-4"}
+                      />
                       <div class="flex items-center text-14-regular min-w-0">
                         <span class="text-text-weak whitespace-nowrap truncate min-w-0">{directory}</span>
                         <Show when={!isDirectory}>
@@ -103,8 +115,9 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
                   <button
                     data-slash-id={cmd.id}
                     classList={{
-                      "w-full flex items-center justify-between gap-4 rounded-md px-2 py-1": true,
+                      "w-full flex items-center justify-between gap-4 rounded-md px-2": true,
                       "bg-surface-raised-base-hover": props.slashActive === cmd.id,
+                      [slashRowPadding()]: true,
                     }}
                     onClick={() => props.onSlashSelect(cmd)}
                     onMouseEnter={() => props.setSlashActive(cmd.id)}

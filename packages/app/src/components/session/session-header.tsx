@@ -131,15 +131,7 @@ const showRequestError = (language: ReturnType<typeof useLanguage>, err: unknown
   })
 }
 
-type SessionHeaderProps = {
-  viewportMode?: import("@/pages/session/session-layout").SessionViewportMode
-  mobileTab?: "session" | "changes"
-  onMobileTabChange?: (tab: "session" | "changes") => void
-  hasReview?: boolean
-  reviewCount?: number
-}
-
-export function SessionHeader(props: SessionHeaderProps) {
+export function SessionHeader() {
   const layout = useLayout()
   const command = useCommand()
   const server = useServer()
@@ -150,8 +142,7 @@ export function SessionHeader(props: SessionHeaderProps) {
   const terminal = useTerminal()
   const { params, view } = useSessionLayout()
   const localViewportMode = useSessionViewportMode()
-  const isDesktopLandscape = createMemo(() => (props.viewportMode ?? localViewportMode()) === "desktop-landscape")
-  const isStacked = createMemo(() => !isDesktopLandscape())
+  const isDesktopLandscape = createMemo(() => localViewportMode() === "desktop-landscape")
 
   const projectDirectory = createMemo(() => decode64(params.dir) ?? "")
   const project = createMemo(() => {
@@ -287,52 +278,6 @@ export function SessionHeader(props: SessionHeaderProps) {
 
   return (
     <>
-      {/* Inline view toggle for stacked mode (iPad portrait / mobile) */}
-      <Show when={isStacked() && props.onMobileTabChange && leftMount()}>
-        {(mount) => (
-          <Portal mount={mount()}>
-            <div class="flex items-center gap-2">
-              <Tooltip
-                placement="bottom"
-                value={
-                  props.mobileTab === "session"
-                    ? language.t("session.switchToChanges")
-                    : language.t("session.switchToSession")
-                }
-              >
-                <Button
-                  variant="ghost"
-                  class="size-11 p-0 rounded-lg flex items-center justify-center"
-                  classList={{
-                    "bg-surface-raised-base-active": props.mobileTab === "changes",
-                  }}
-                  onClick={() => props.onMobileTabChange?.(props.mobileTab === "session" ? "changes" : "session")}
-                  aria-label={
-                    props.mobileTab === "session"
-                      ? language.t("session.switchToChanges")
-                      : language.t("session.switchToSession")
-                  }
-                >
-                  <Show
-                    when={props.mobileTab === "changes"}
-                    fallback={<Icon name="sidebar" size="large" class="text-icon-base" />}
-                  >
-                    <div class="relative">
-                      <Icon name="review" size="large" class="text-icon-strong" />
-                      <Show when={props.hasReview && props.reviewCount && props.reviewCount > 0}>
-                        <span class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-icon-interactive-base text-background-base text-11-medium flex items-center justify-center">
-                          {(props.reviewCount ?? 0) > 99 ? "99+" : props.reviewCount}
-                        </span>
-                      </Show>
-                    </div>
-                  </Show>
-                </Button>
-              </Tooltip>
-            </div>
-          </Portal>
-        )}
-      </Show>
-
       <Show when={search()}>
         <Show when={centerMount()}>
           {(mount) => (

@@ -55,6 +55,7 @@ import { PromptImageAttachments } from "./prompt-input/image-attachments"
 import { PromptDragOverlay } from "./prompt-input/drag-overlay"
 import { promptPlaceholder } from "./prompt-input/placeholder"
 import { ImagePreview } from "@opencode-ai/ui/image-preview"
+import type { SessionViewportMode } from "@/pages/session/session-layout"
 
 interface PromptInputProps {
   class?: string
@@ -67,6 +68,11 @@ interface PromptInputProps {
   onQueue?: (draft: FollowupDraft) => void
   onAbort?: () => void
   onSubmit?: () => void
+  viewportMode?: SessionViewportMode
+  mobileTab?: "session" | "changes"
+  onMobileTabChange?: (tab: "session" | "changes") => void
+  hasReview?: boolean
+  reviewCount?: number
 }
 
 const EXAMPLES = [
@@ -275,6 +281,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const buttons = createMemo(() => motion(buttonsSpring()))
   const shell = createMemo(() => motion(1 - buttonsSpring()))
   const control = createMemo(() => ({ height: "28px", ...buttons() }))
+
+  // Button sizing: 44px for touch (stacked), 32px for desktop
+  const isStacked = createMemo(() => props.viewportMode === "stacked")
+  const buttonSizeClass = createMemo(() => (isStacked() ? "size-11" : "size-8"))
+  const iconSize = createMemo(() => (isStacked() ? "normal" : "small"))
 
   const commentCount = createMemo(() => {
     if (store.mode === "shell") return 0
@@ -1282,6 +1293,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         onSlashSelect={handleSlashSelect}
         commandKeybind={command.keybind}
         t={(key) => language.t(key as Parameters<typeof language.t>[0])}
+        viewportMode={props.viewportMode}
       />
       <DockShellForm
         onSubmit={handleSubmit}
@@ -1308,9 +1320,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             prompt.context.remove(item.key)
           }}
           t={(key) => language.t(key as Parameters<typeof language.t>[0])}
+          viewportMode={props.viewportMode}
         />
         <PromptImageAttachments
           attachments={imageAttachments()}
+          viewportMode={props.viewportMode}
           onOpen={(attachment) =>
             dialog.show(() => <ImagePreview src={attachment.dataUrl} alt={attachment.filename} />)
           }
@@ -1357,7 +1371,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               onKeyDown={handleKeyDown}
               classList={{
                 "select-text": true,
-                "w-full pl-3 pr-2 pt-2 text-14-regular text-text-strong focus:outline-none whitespace-pre-wrap": true,
+                "w-full px-3 py-4 text-text-strong focus:outline-none whitespace-pre-wrap": true,
+                "min-h-[64px] md:min-h-[72px] lg:min-h-[80px] text-14-regular": !isStacked(),
+                "min-h-[80px] md:min-h-[96px] text-16-regular": isStacked(),
                 "[&_[data-type=file]]:text-syntax-property": true,
                 "[&_[data-type=agent]]:text-syntax-type": true,
                 "font-mono!": store.mode === "shell",
@@ -1366,8 +1382,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             />
             <Show when={!prompt.dirty()}>
               <div
-                class="absolute top-0 inset-x-0 pl-3 pr-2 pt-2 text-14-regular text-text-weak pointer-events-none whitespace-nowrap truncate"
-                classList={{ "font-mono!": store.mode === "shell" }}
+                class="absolute inset-x-0 px-3 py-4 text-text-weak pointer-events-none whitespace-nowrap truncate"
+                classList={{
+                  "font-mono!": store.mode === "shell",
+                  "text-16-regular": !isStacked(),
+                  "text-18-regular": isStacked(),
+                }}
                 style={{ "padding-bottom": space }}
               >
                 {placeholder()}
@@ -1385,45 +1405,28 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             }}
           />
 
-          <div class="pointer-events-none absolute bottom-2 right-2 flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept={ACCEPTED_FILE_TYPES.join(",")}
-              class="hidden"
-              onChange={(e) => {
-                const list = e.currentTarget.files
-                if (list) void addAttachments(Array.from(list))
-                e.currentTarget.value = ""
-              }}
-            />
-
-            <div class="flex items-center gap-1 pointer-events-auto">
-              <Tooltip placement="top" inactive={!working() && blank()} value={tip()}>
-                <IconButton
-                  data-action="prompt-submit"
-                  type="submit"
-                  disabled={store.mode !== "normal" || (!working() && blank())}
-                  tabIndex={store.mode === "normal" ? undefined : -1}
-                  icon={stopping() ? "stop" : "arrow-up"}
-                  variant="primary"
-                  class="size-8"
-                  style={buttons()}
-                  aria-label={stopping() ? language.t("prompt.action.stop") : language.t("prompt.action.send")}
-                />
-              </Tooltip>
-            </div>
-          </div>
-
-          <div class="pointer-events-none absolute bottom-2 left-2">
+          <div class="pointer-events-none absolute bottom-2 inset-x-2 flex items-center justify-between">
+            {/* Left side: Attach and Changes buttons */}
             <div
+              class="flex items-center gap-1 pointer-events-auto"
               aria-hidden={store.mode !== "normal"}
-              class="pointer-events-auto"
               style={{
                 "pointer-events": buttonsSpring() > 0.5 ? "auto" : "none",
               }}
             >
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept={ACCEPTED_FILE_TYPES.join(",")}
+                class="hidden"
+                onChange={(e) => {
+                  const list = e.currentTarget.files
+                  if (list) void addAttachments(Array.from(list))
+                  e.currentTarget.value = ""
+                }}
+              />
+
               <TooltipKeybind
                 placement="top"
                 title={language.t("prompt.action.attachFile")}
@@ -1433,16 +1436,77 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   data-action="prompt-attach"
                   type="button"
                   variant="ghost"
-                  class="size-8 p-0"
+                  class={buttonSizeClass()}
+                  classList={{ "p-0": true }}
                   style={buttons()}
                   onClick={pick}
                   disabled={store.mode !== "normal"}
                   tabIndex={store.mode === "normal" ? undefined : -1}
                   aria-label={language.t("prompt.action.attachFile")}
                 >
-                  <Icon name="plus" class="size-4.5" />
+                  <Icon name="plus" size={iconSize()} />
                 </Button>
               </TooltipKeybind>
+
+              {/* Changes toggle button - visible only in stacked mode */}
+              <Show when={props.viewportMode === "stacked" && props.onMobileTabChange}>
+                <Tooltip
+                  placement="top"
+                  value={
+                    props.mobileTab === "session"
+                      ? language.t("session.switchToChanges")
+                      : language.t("session.switchToSession")
+                  }
+                >
+                  <Button
+                    data-action="prompt-view-toggle"
+                    type="button"
+                    variant="ghost"
+                    class={buttonSizeClass()}
+                    classList={{
+                      "p-0": true,
+                      "bg-surface-raised-base-active": props.mobileTab === "changes",
+                    }}
+                    style={buttons()}
+                    onClick={() => props.onMobileTabChange?.(props.mobileTab === "session" ? "changes" : "session")}
+                    disabled={store.mode !== "normal"}
+                    tabIndex={store.mode === "normal" ? undefined : -1}
+                    aria-label={
+                      props.mobileTab === "session"
+                        ? language.t("session.switchToChanges")
+                        : language.t("session.switchToSession")
+                    }
+                  >
+                    <Show when={props.mobileTab === "changes"} fallback={<Icon name="sidebar" size={iconSize()} />}>
+                      <div class="relative">
+                        <Icon name="review" size={iconSize()} class="text-icon-strong" />
+                        <Show when={props.hasReview && props.reviewCount && props.reviewCount > 0}>
+                          <span class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-icon-interactive-base text-background-base text-11-medium flex items-center justify-center">
+                            {(props.reviewCount ?? 0) > 99 ? "99+" : props.reviewCount}
+                          </span>
+                        </Show>
+                      </div>
+                    </Show>
+                  </Button>
+                </Tooltip>
+              </Show>
+            </div>
+
+            {/* Right side: Submit button */}
+            <div class="flex items-center gap-1 pointer-events-auto">
+              <Tooltip placement="top" inactive={!working() && blank()} value={tip()}>
+                <IconButton
+                  data-action="prompt-submit"
+                  type="submit"
+                  disabled={store.mode !== "normal" || (!working() && blank())}
+                  tabIndex={store.mode === "normal" ? undefined : -1}
+                  icon={stopping() ? "stop" : "arrow-up"}
+                  variant="primary"
+                  class={buttonSizeClass()}
+                  style={buttons()}
+                  aria-label={stopping() ? language.t("prompt.action.stop") : language.t("prompt.action.send")}
+                />
+              </Tooltip>
             </div>
           </div>
         </div>
