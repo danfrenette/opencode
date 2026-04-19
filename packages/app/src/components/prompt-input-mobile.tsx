@@ -136,7 +136,7 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
 
   const openSettings = () => {
     void import("./dialog-mobile-composer-settings").then((x) => {
-      dialog.show(() => <x.DialogMobileComposerSettings />)
+      dialog.show(() => <x.DialogMobileComposerSettings mode={store.mode} onModeChange={(mode) => setStore("mode", mode)} />)
     })
   }
 
@@ -155,6 +155,12 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
       .join(" ")
     return `${agent} • ${model}`
   })
+
+  const modeLabel = createMemo(() =>
+    store.mode === "shell" ? language.t("prompt.mode.shell") : language.t("prompt.mode.normal"),
+  )
+
+  const providerLabel = createMemo(() => local.model.current()?.provider?.name || local.agent.current()?.name || "Default")
 
   const removeImage = (id: string) => {
     const current = prompt.current()
@@ -305,36 +311,36 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
           </div>
         </div>
 
-        <div class="flex items-center justify-between gap-2 border-t border-border-weaker-base px-2 py-1.5">
+        <div class="border-t border-border-weaker-base px-1 py-1.5">
           <Button
             variant="ghost"
             size="small"
-            class="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-text-weak transition-colors"
-            onClick={toggleMode}
-            classList={{
-              "bg-surface-raised-base-active text-text-strong": store.mode === "shell",
-            }}
-          >
-            <Icon
-              size="small"
-              name={store.mode === "shell" ? "terminal-active" : "terminal"}
-              classList={{
-                "text-icon-strong": store.mode === "shell",
-                "text-icon-weak": store.mode === "normal",
-              }}
-            />
-            <span class="text-12-medium">{language.t("prompt.mode.shell")}</span>
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="small"
-            class="flex h-7 min-w-0 max-w-[168px] items-center gap-1.5 rounded-md px-1.5 text-text-weak transition-colors hover:text-text-strong"
+            class="flex h-11 w-full items-center justify-between rounded-[14px] px-2.5 text-left transition-colors hover:bg-surface-raised-base-hover"
             onClick={openSettings}
           >
-            <Icon name="settings-gear" size="small" class="shrink-0 text-icon-weak" />
-            <span class="truncate text-12-medium">{configSummary()}</span>
-            <Icon name="chevron-down" size="small" class="shrink-0 text-icon-weaker" />
+            <div class="flex min-w-0 items-center gap-2.5">
+              <div class="flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-surface-raised-base-active text-icon-strong">
+                <Icon name={store.mode === "shell" ? "terminal-active" : "settings-gear"} size="small" />
+              </div>
+              <div class="min-w-0">
+                <div class="flex min-w-0 items-center gap-1.5">
+                  <span class="truncate text-13-medium text-text-strong">{configSummary()}</span>
+                </div>
+                <div class="flex min-w-0 items-center gap-1.5 text-11-medium text-text-weak">
+                  <span>{modeLabel()}</span>
+                  <span class="text-text-weaker">•</span>
+                  <span class="truncate">{providerLabel()}</span>
+                </div>
+              </div>
+            </div>
+            <div class="flex shrink-0 items-center gap-1 text-text-weaker">
+              <Show when={store.mode === "shell"}>
+                <span class="rounded-md bg-surface-raised-base-active px-2 py-1 text-11-medium text-text-weak">
+                  {language.t("prompt.mode.shell")}
+                </span>
+              </Show>
+              <Icon name="chevron-down" size="small" class="shrink-0" />
+            </div>
           </Button>
         </div>
       </div>
