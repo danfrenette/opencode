@@ -140,14 +140,19 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
     })
   }
 
+  const pick = () => {
+    void import("./dialog-select-file").then((x) => {
+      dialog.show(() => <x.DialogSelectFile mode="files" />)
+    })
+  }
+
   // Get current config summary for the collapsed control
   const configSummary = createMemo(() => {
     const agent = local.agent.current()?.name || "Default"
-    const model = local.model.current()?.name || language.t("dialog.model.select.title")
-    const variant = local.model.variant.current()
-    if (variant && variant !== "default") {
-      return `${agent} • ${model} (${variant})`
-    }
+    const model = (local.model.current()?.name || language.t("dialog.model.select.title"))
+      .split(/\s+/)
+      .slice(0, 2)
+      .join(" ")
     return `${agent} • ${model}`
   })
 
@@ -159,33 +164,26 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
 
   return (
     <div
-      class="flex flex-col bg-background-stronger border-t border-border-weak-base"
+      class="flex flex-col border-t border-border-weak-base bg-background-base px-2 pt-2 pb-2"
       classList={{ [props.class || ""]: !!props.class }}
     >
-      {/* Context items */}
       <Show when={contextItems().length > 0}>
-        <div class="flex flex-nowrap items-start gap-2 px-3 pt-2 overflow-x-auto no-scrollbar">
+        <div class="mb-2 flex flex-nowrap items-start gap-2 px-1 no-scrollbar overflow-x-auto">
           <For each={contextItems()}>
             {(item) => {
-              const label = getFilenameTruncated(item.path, 14)
+              const label = getFilenameTruncated(item.path, 16)
               return (
-                <Tooltip
-                  value={item.path}
-                  placement="top"
-                  openDelay={1000}
-                >
-                  <div
-                    class="group shrink-0 flex items-center gap-1.5 rounded-md pl-2 pr-1 py-1.5 max-w-[160px] cursor-default bg-background-base border border-border-weak-base"
-                  >
-                    <FileIcon node={{ path: item.path, type: "file" }} class="shrink-0 size-3.5" />
-                    <span class="text-11-regular text-text-strong whitespace-nowrap">{label}</span>
+                <Tooltip value={item.path} placement="top" openDelay={1000}>
+                  <div class="group flex h-10 shrink-0 items-center gap-1.5 rounded-[12px] bg-background-stronger px-2.5 shadow-xs-border-base">
+                    <FileIcon node={{ path: item.path, type: "file" }} class="size-3.5 shrink-0" />
+                    <span class="max-w-[160px] truncate text-12-medium text-text-strong">{label}</span>
                     <button
                       type="button"
                       onClick={() => prompt.context.remove(item.key)}
-                      class="ml-1 size-4 rounded-full flex items-center justify-center hover:bg-surface-raised-base-hover"
+                      class="ml-0.5 flex size-4.5 items-center justify-center rounded-full text-text-weak transition-colors hover:bg-surface-raised-base-hover hover:text-text-strong"
                       aria-label={language.t("common.remove")}
                     >
-                      <Icon name="close-small" class="size-3 text-text-weak" />
+                      <Icon name="close-small" class="size-3" />
                     </button>
                   </div>
                 </Tooltip>
@@ -195,9 +193,8 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
         </div>
       </Show>
 
-      {/* Image attachments */}
       <Show when={imageAttachments().length > 0}>
-        <div class="flex flex-wrap gap-2 px-3 pt-2">
+        <div class="mb-2 flex flex-wrap gap-2 px-1">
           <For each={imageAttachments()}>
             {(attachment) => (
               <Tooltip value={attachment.filename} placement="top">
@@ -205,7 +202,7 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
                   <Show
                     when={attachment.mime.startsWith("image/")}
                     fallback={
-                      <div class="size-14 rounded-md bg-surface-base flex items-center justify-center border border-border-base">
+                      <div class="flex size-14 items-center justify-center rounded-[12px] bg-background-stronger shadow-xs-border-base">
                         <Icon name="folder" class="size-5 text-text-weak" />
                       </div>
                     }
@@ -213,13 +210,13 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
                     <img
                       src={attachment.dataUrl}
                       alt={attachment.filename}
-                      class="size-14 rounded-md object-cover border border-border-base"
+                      class="size-14 rounded-[12px] object-cover shadow-xs-border-base"
                     />
                   </Show>
                   <button
                     type="button"
                     onClick={() => removeImage(attachment.id)}
-                    class="absolute -top-1.5 -right-1.5 size-5 rounded-full bg-surface-raised-stronger border border-border-base flex items-center justify-center"
+                    class="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-background-base shadow-xs-border-base"
                     aria-label={language.t("common.remove")}
                   >
                     <Icon name="close-small" class="size-3 text-text-weak" />
@@ -231,50 +228,36 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
         </div>
       </Show>
 
-      {/* Main input area */}
-      <div class="flex items-end gap-2 px-3 py-3">
-        {/* Attach button */}
-        <Tooltip placement="top" value={language.t("prompt.action.attachFile")}>
-          <Button
-            data-action="prompt-attach"
-            type="button"
-            variant="ghost"
-            size="small"
-            class="w-11 h-11 shrink-0 rounded-md flex items-center justify-center"
-            onClick={() => {}}
-            aria-label={language.t("prompt.action.attachFile")}
-          >
-            <Icon name="plus" size="small" />
-          </Button>
-        </Tooltip>
-
-        {/* Text input */}
-        <div class="flex-1 min-w-0">
+      <div class="overflow-hidden rounded-[12px] bg-background-stronger shadow-xs-border-base">
+        <div class="relative min-h-[92px] px-3 pt-3 pb-12">
+          <Show when={blank()}>
+            <div class="pointer-events-none absolute left-3 right-12 top-3 text-14-regular text-text-weak">
+              {store.mode === "shell"
+                ? language.t("prompt.mode.shell")
+                : language.t("prompt.placeholder")}
+            </div>
+          </Show>
           <div
             ref={editorRef}
             contentEditable
-            class="min-h-[44px] max-h-[120px] px-3 py-2.5 text-14-regular text-text-strong bg-background-base rounded-lg border border-border-weak-base overflow-y-auto"
+            class="min-h-[44px] max-h-[120px] overflow-y-auto bg-transparent pr-10 text-14-regular text-text-strong focus:outline-none"
             classList={{
               "font-mono": store.mode === "shell",
             }}
             onInput={(e) => {
               const text = e.currentTarget.textContent || ""
-              // Update prompt state
               const parts = prompt.current()
               const textPart = parts.find((p) => p.type === "text")
               if (textPart) {
                 prompt.set(
                   parts.map((p) =>
-                    p.type === "text" ? { ...p, content: text, start: 0, end: text.length } : p
+                    p.type === "text" ? { ...p, content: text, start: 0, end: text.length } : p,
                   ),
-                  text.length
+                  text.length,
                 )
-              } else {
-                prompt.set(
-                  [...parts, { type: "text", content: text, start: 0, end: text.length }],
-                  text.length
-                )
+                return
               }
+              prompt.set([...parts, { type: "text", content: text, start: 0, end: text.length }], text.length)
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -286,69 +269,74 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
             aria-multiline="true"
             aria-label={store.mode === "shell" ? language.t("prompt.mode.shell") : language.t("prompt.placeholder")}
           />
+
+          <div class="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-[linear-gradient(to_top,var(--background-stronger)_35%,transparent)]" />
+
+          <div class="pointer-events-none absolute bottom-2 left-2">
+            <Tooltip placement="top" value={language.t("prompt.action.attachFile")}>
+              <Button
+                data-action="prompt-attach"
+                type="button"
+                variant="ghost"
+                size="small"
+                class="pointer-events-auto flex size-8 items-center justify-center rounded-md p-0 text-icon-weak transition-colors hover:text-icon-strong"
+                onClick={pick}
+                aria-label={language.t("prompt.action.attachFile")}
+              >
+                <Icon name="plus" size="small" />
+              </Button>
+            </Tooltip>
+          </div>
+
+          <div class="pointer-events-none absolute bottom-2 right-2">
+            <Tooltip placement="top" value={stopping() ? language.t("prompt.action.stop") : language.t("prompt.action.send")}>
+              <IconButton
+                data-action="prompt-submit"
+                type="submit"
+                disabled={!canSubmit()}
+                icon={stopping() ? "stop" : "arrow-up"}
+                variant="primary"
+                size="small"
+                class="pointer-events-auto size-8 rounded-md"
+                onClick={(e) => void handleSubmit(e)}
+                aria-label={stopping() ? language.t("prompt.action.stop") : language.t("prompt.action.send")}
+              />
+            </Tooltip>
+          </div>
         </div>
 
-        {/* Send/Stop button */}
-        <Tooltip
-          placement="top"
-          value={stopping() ? language.t("prompt.action.stop") : language.t("prompt.action.send")}
-        >
-          <IconButton
-            data-action="prompt-submit"
-            type="submit"
-            disabled={!canSubmit()}
-            icon={stopping() ? "stop" : "arrow-up"}
-            variant="primary"
+        <div class="flex items-center justify-between gap-2 border-t border-border-weaker-base px-2 py-1.5">
+          <Button
+            variant="ghost"
             size="small"
-            class="w-11 h-11 shrink-0 rounded-md"
-            onClick={(e) => void handleSubmit(e)}
-            aria-label={stopping() ? language.t("prompt.action.stop") : language.t("prompt.action.send")}
-          />
-        </Tooltip>
-      </div>
-
-      {/* Bottom controls: Mode toggle + Collapsed config */}
-      <div class="flex items-center justify-between px-3 pb-3">
-        {/* Shell mode toggle */}
-        <Button
-          variant="ghost"
-          size="small"
-          class="h-9 px-2 rounded-md flex items-center gap-2"
-          onClick={toggleMode}
-          classList={{
-            "bg-surface-raised-base-active": store.mode === "shell",
-          }}
-        >
-          <Icon
-            size="small"
-            name={store.mode === "shell" ? "terminal-active" : "terminal"}
+            class="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-text-weak transition-colors"
+            onClick={toggleMode}
             classList={{
-              "text-icon-strong": store.mode === "shell",
-              "text-icon-weak": store.mode === "normal",
-            }}
-          />
-          <span
-            class="text-13-medium"
-            classList={{
-              "text-text-strong": store.mode === "shell",
-              "text-text-weak": store.mode === "normal",
+              "bg-surface-raised-base-active text-text-strong": store.mode === "shell",
             }}
           >
-            {language.t("prompt.mode.shell")}
-          </span>
-        </Button>
+            <Icon
+              size="small"
+              name={store.mode === "shell" ? "terminal-active" : "terminal"}
+              classList={{
+                "text-icon-strong": store.mode === "shell",
+                "text-icon-weak": store.mode === "normal",
+              }}
+            />
+            <span class="text-12-medium">{language.t("prompt.mode.shell")}</span>
+          </Button>
 
-        {/* Collapsed config control */}
-        <Button
-          variant="ghost"
-          size="small"
-          class="h-9 px-2 rounded-md flex items-center gap-2 max-w-[200px]"
-          onClick={openSettings}
-        >
-          <Icon name="settings-gear" size="small" class="text-icon-weak" />
-          <span class="text-13-regular text-text-weak truncate">{configSummary()}</span>
-          <Icon name="chevron-down" size="small" class="text-icon-weaker shrink-0" />
-        </Button>
+          <Button
+            variant="ghost"
+            size="small"
+            class="flex h-7 min-w-0 max-w-[168px] items-center gap-1.5 rounded-md px-1.5 text-text-weak transition-colors hover:text-text-strong"
+            onClick={openSettings}
+          >
+            <Icon name="settings-gear" size="small" class="shrink-0 text-icon-weak" />
+            <span class="truncate text-12-medium">{configSummary()}</span>
+            <Icon name="chevron-down" size="small" class="shrink-0 text-icon-weaker" />
+          </Button>
+        </div>
       </div>
     </div>
   )

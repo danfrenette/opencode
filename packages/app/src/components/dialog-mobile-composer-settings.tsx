@@ -22,8 +22,8 @@ export function DialogMobileComposerSettings(props: DialogMobileComposerSettings
   const providers = useProviders()
   const sync = useSync()
 
-  const agentsLoading = createMemo(() => !sync.data.ready || sync.data.agent.length === 0)
-  const providersLoading = createMemo(() => providers.loading?.() ?? false)
+  const agentsLoading = createMemo(() => sync.data.agent.length === 0)
+  const providersLoading = createMemo(() => providers.all().length === 0)
 
   const agentNames = createMemo(() => local.agent.list().map((agent) => agent.name))
 

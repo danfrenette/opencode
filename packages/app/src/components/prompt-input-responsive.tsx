@@ -1,5 +1,6 @@
 import { createMediaQuery } from "@solid-primitives/media"
 import { Show } from "solid-js"
+import type { Prompt } from "@/context/prompt"
 import { PromptInput } from "./prompt-input"
 import { PromptInputMobile } from "./prompt-input-mobile"
 import type { FollowupDraft } from "./prompt-input/submit"
@@ -9,7 +10,7 @@ interface PromptInputResponsiveProps {
   ref?: (el: HTMLDivElement) => void
   newSessionWorktree?: string
   onNewSessionWorktreeReset?: () => void
-  edit?: { id: string; prompt: unknown; context: FollowupDraft["context"] }
+  edit?: { id: string; prompt: Prompt; context: FollowupDraft["context"] }
   onEditLoaded?: () => void
   shouldQueue?: () => boolean
   onQueue?: (draft: FollowupDraft) => void
