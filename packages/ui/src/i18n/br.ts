@@ -1,6 +1,7 @@
 export const dict = {
   "ui.sessionReview.title": "Alterações da sessão",
   "ui.sessionReview.title.lastTurn": "Alterações do último turno",
+  "ui.sessionReview.title.pendingApproval": "Pending approval",
   "ui.sessionReview.diffStyle.unified": "Unificado",
   "ui.sessionReview.diffStyle.split": "Dividido",
   "ui.sessionReview.openFile": "Abrir arquivo",
@@ -129,6 +130,11 @@ export const dict = {
   "ui.permission.deny": "Negar",
   "ui.permission.allowAlways": "Permitir sempre",
   "ui.permission.allowOnce": "Permitir uma vez",
+  "ui.permission.reviewChanges": "Review changes",
+  "ui.permission.reviewSummary": "Open the full diff to approve or deny this edit.",
+  "ui.permission.reasonAction": "Reason",
+  "ui.permission.sendReason": "Deny with reason",
+  "ui.permission.reasonPlaceholder": "Tell the agent what should change before this edit is approved.",
 
   "ui.message.expand": "Expandir mensagem",
   "ui.message.collapse": "Recolher mensagem",

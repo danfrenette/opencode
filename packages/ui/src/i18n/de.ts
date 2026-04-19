@@ -5,6 +5,7 @@ type Keys = keyof typeof en
 export const dict = {
   "ui.sessionReview.title": "Sitzungsänderungen",
   "ui.sessionReview.title.lastTurn": "Änderungen der letzten Runde",
+  "ui.sessionReview.title.pendingApproval": "Pending approval",
   "ui.sessionReview.diffStyle.unified": "Vereinheitlicht",
   "ui.sessionReview.diffStyle.split": "Geteilt",
   "ui.sessionReview.openFile": "Datei öffnen",
@@ -134,6 +135,11 @@ export const dict = {
   "ui.permission.deny": "Verweigern",
   "ui.permission.allowAlways": "Immer erlauben",
   "ui.permission.allowOnce": "Einmal erlauben",
+  "ui.permission.reviewChanges": "Review changes",
+  "ui.permission.reviewSummary": "Open the full diff to approve or deny this edit.",
+  "ui.permission.reasonAction": "Reason",
+  "ui.permission.sendReason": "Deny with reason",
+  "ui.permission.reasonPlaceholder": "Tell the agent what should change before this edit is approved.",
 
   "ui.message.expand": "Nachricht erweitern",
   "ui.message.collapse": "Nachricht reduzieren",

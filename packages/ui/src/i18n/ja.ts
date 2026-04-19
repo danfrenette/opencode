@@ -1,6 +1,7 @@
 export const dict = {
   "ui.sessionReview.title": "セッションの変更",
   "ui.sessionReview.title.lastTurn": "前回ターンの変更",
+  "ui.sessionReview.title.pendingApproval": "Pending approval",
   "ui.sessionReview.diffStyle.unified": "Unified",
   "ui.sessionReview.diffStyle.split": "Split",
   "ui.sessionReview.openFile": "ファイルを開く",
@@ -128,6 +129,11 @@ export const dict = {
   "ui.permission.deny": "拒否",
   "ui.permission.allowAlways": "常に許可",
   "ui.permission.allowOnce": "今回のみ許可",
+  "ui.permission.reviewChanges": "Review changes",
+  "ui.permission.reviewSummary": "Open the full diff to approve or deny this edit.",
+  "ui.permission.reasonAction": "Reason",
+  "ui.permission.sendReason": "Deny with reason",
+  "ui.permission.reasonPlaceholder": "Tell the agent what should change before this edit is approved.",
 
   "ui.message.expand": "メッセージを展開",
   "ui.message.collapse": "メッセージを折りたたむ",

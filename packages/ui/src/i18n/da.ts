@@ -1,6 +1,7 @@
 export const dict = {
   "ui.sessionReview.title": "Sessionsændringer",
   "ui.sessionReview.title.lastTurn": "Ændringer fra sidste tur",
+  "ui.sessionReview.title.pendingApproval": "Pending approval",
   "ui.sessionReview.diffStyle.unified": "Samlet",
   "ui.sessionReview.diffStyle.split": "Opdelt",
   "ui.sessionReview.openFile": "Åbn fil",
@@ -128,6 +129,11 @@ export const dict = {
   "ui.permission.deny": "Afvis",
   "ui.permission.allowAlways": "Tillad altid",
   "ui.permission.allowOnce": "Tillad én gang",
+  "ui.permission.reviewChanges": "Review changes",
+  "ui.permission.reviewSummary": "Open the full diff to approve or deny this edit.",
+  "ui.permission.reasonAction": "Reason",
+  "ui.permission.sendReason": "Deny with reason",
+  "ui.permission.reasonPlaceholder": "Tell the agent what should change before this edit is approved.",
 
   "ui.message.expand": "Udvid besked",
   "ui.message.collapse": "Skjul besked",

@@ -377,6 +377,9 @@ export default function Page() {
     changes: "git" as ChangeMode,
     newSessionWorktree: "main",
     deferRender: false,
+    pendingApprovalEntered: false,
+    pendingApprovalReasonOpen: false,
+    pendingApprovalReason: "",
   })
 
   const [followup, setFollowup] = persisted(
@@ -476,7 +479,57 @@ export default function Page() {
     }
   })
   const refreshVcs = () => void queryClient.invalidateQueries({ queryKey: vcsKey() })
+
+  /**
+   * Pending diffs from an edit permission request awaiting approval.
+   * These take precedence when reviewing a pending edit permission.
+   */
+  const pendingPermissionDiffs = createMemo(() => composer.pendingDiffs())
+  const hasPendingPermissionDiffs = createMemo(() => pendingPermissionDiffs().length > 0)
+  const pendingPermissionFiles = createMemo(() => pendingPermissionDiffs().map((diff) => diff.file))
+  const pendingApprovalActive = createMemo(() => hasPendingPermissionDiffs() && store.pendingApprovalEntered)
+  const reviewingPendingPermission = createMemo(() =>
+    pendingApprovalActive() && (isDesktop() ? view().reviewPanel.opened() : store.mobileTab === "changes"),
+  )
+  const mobilePendingApproval = createMemo(() => reviewingPendingPermission() && !isDesktop())
+
+  const openPendingApproval = () => {
+    const files = pendingPermissionFiles()
+    setStore({
+      pendingApprovalEntered: true,
+      pendingApprovalReasonOpen: false,
+      pendingApprovalReason: "",
+    })
+    view().review.setOpen(files)
+    if (isDesktop()) {
+      openReviewPanel()
+      return
+    }
+    setStore("mobileTab", "changes")
+  }
+
+  const closePendingApproval = () => {
+    setStore({
+      pendingApprovalEntered: false,
+      pendingApprovalReasonOpen: false,
+      pendingApprovalReason: "",
+    })
+    if (!isDesktop()) setStore("mobileTab", "session")
+  }
+
+  createEffect(() => {
+    if (hasPendingPermissionDiffs()) return
+    setStore({
+      pendingApprovalEntered: false,
+      pendingApprovalReasonOpen: false,
+      pendingApprovalReason: "",
+    })
+  })
+
   const reviewDiffs = () => {
+    // If there's a pending edit permission with diffs, show those for review
+    if (hasPendingPermissionDiffs()) return pendingPermissionDiffs()
+
     if (store.changes === "git" || store.changes === "branch")
       // avoids suspense
       return vcsQuery.isFetched ? (vcsQuery.data ?? []) : []
@@ -485,6 +538,7 @@ export default function Page() {
   const reviewCount = () => reviewDiffs().length
   const hasReview = () => reviewCount() > 0
   const reviewReady = () => {
+    if (hasPendingPermissionDiffs()) return true
     if (store.changes === "git" || store.changes === "branch") return !vcsQuery.isPending
     return true
   }
@@ -913,6 +967,15 @@ export default function Page() {
       return null
     }
 
+    // When viewing pending permission diffs, show a static title
+    if (hasPendingPermissionDiffs()) {
+      return (
+        <span class="text-14-medium text-text-strong">
+          {language.t("ui.sessionReview.title.pendingApproval")}
+        </span>
+      )
+    }
+
     const label = (option: ChangeMode) => {
       if (option === "git") return language.t("ui.sessionReview.title.git")
       if (option === "branch") return language.t("ui.sessionReview.title.branch")
@@ -984,33 +1047,139 @@ export default function Page() {
     classes?: SessionReviewTabProps["classes"]
     loadingClass: string
     emptyClass: string
-  }) => (
-    <Show when={!store.deferRender}>
-      <SessionReviewTab
-        title={changesTitle()}
-        empty={reviewEmpty(input)}
-        diffs={reviewDiffs}
-        view={view}
-        diffStyle={input.diffStyle}
-        onDiffStyleChange={input.onDiffStyleChange}
-        onScrollRef={(el) => setTree("reviewScroll", el)}
-        focusedFile={tree.activeDiff}
-        onLineComment={(comment) => addCommentToContext({ ...comment, origin: "review" })}
-        onLineCommentUpdate={updateCommentInContext}
-        onLineCommentDelete={removeCommentFromContext}
-        lineCommentActions={reviewCommentActions()}
-        commentMentions={{
-          items: file.searchFilesAndDirectories,
-        }}
-        comments={comments.all()}
-        focusedComment={comments.focus()}
-        onFocusedCommentChange={comments.setFocus}
-        onViewFile={openReviewFile}
-        classes={input.classes}
-      />
-    </Show>
-  )
+  }) => {
+    const submitPendingDecision = (response: "once" | "always" | "reject", message?: string) => {
+      composer.decide(response, message)
+      if (response !== "reject") {
+        setStore({ pendingApprovalReasonOpen: false, pendingApprovalReason: "" })
+        return
+      }
+      setStore("pendingApprovalReasonOpen", false)
+      setStore("pendingApprovalReason", "")
+    }
 
+    const PendingActions = () => (
+      <Show when={reviewingPendingPermission()}>
+        <div class="border-t border-border-weak-base bg-background-base px-3 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] pt-3">
+          <div class="flex flex-col gap-2">
+            <Show
+              when={store.pendingApprovalReasonOpen}
+              fallback={
+                <>
+                  <Button
+                    variant="primary"
+                    size="large"
+                    icon="circle-check"
+                    class="min-h-11 w-full justify-center"
+                    onClick={() => submitPendingDecision("once")}
+                    disabled={composer.permissionResponding()}
+                  >
+                    {language.t("ui.permission.allowOnce")}
+                  </Button>
+                  <div class="grid grid-cols-3 gap-2">
+                    <Button
+                      variant="secondary"
+                      size="normal"
+                      icon="shield"
+                      class="min-h-11 justify-center"
+                      onClick={() => submitPendingDecision("always")}
+                      disabled={composer.permissionResponding()}
+                    >
+                      {language.t("ui.permission.allowAlways")}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="normal"
+                      icon="comment"
+                      class="min-h-11 justify-center"
+                      onClick={() => setStore("pendingApprovalReasonOpen", true)}
+                      disabled={composer.permissionResponding()}
+                    >
+                      {language.t("ui.permission.reasonAction")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="normal"
+                      icon="circle-x"
+                      class="min-h-11 justify-center"
+                      onClick={() => submitPendingDecision("reject")}
+                      disabled={composer.permissionResponding()}
+                    >
+                      {language.t("ui.permission.deny")}
+                    </Button>
+                  </div>
+                </>
+              }
+            >
+              <div class="rounded-xl border border-border-weak-base bg-background-stronger p-3">
+                <div class="text-12-medium text-text-weak">{language.t("ui.permission.reasonAction")}</div>
+                <textarea
+                  rows={3}
+                  value={store.pendingApprovalReason}
+                  onInput={(event) => setStore("pendingApprovalReason", event.currentTarget.value)}
+                  placeholder={language.t("ui.permission.reasonPlaceholder")}
+                  class="mt-2 min-h-24 w-full resize-none rounded-lg border border-border-weak-base bg-background-base px-3 py-2 text-14-regular text-text-strong outline-none transition-colors placeholder:text-text-weak focus:border-border-strong-base"
+                />
+                <div class="mt-3 flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="normal"
+                    class="min-h-11 flex-1 justify-center"
+                    onClick={() => setStore({ pendingApprovalReasonOpen: false, pendingApprovalReason: "" })}
+                    disabled={composer.permissionResponding()}
+                  >
+                    {language.t("common.cancel")}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="normal"
+                    icon="comment"
+                    class="min-h-11 flex-1 justify-center"
+                    onClick={() => submitPendingDecision("reject", store.pendingApprovalReason.trim() || undefined)}
+                    disabled={composer.permissionResponding() || store.pendingApprovalReason.trim().length === 0}
+                  >
+                    {language.t("ui.permission.sendReason")}
+                  </Button>
+                </div>
+              </div>
+            </Show>
+          </div>
+        </div>
+      </Show>
+    )
+
+    return (
+      <Show when={!store.deferRender}>
+        <div class="flex flex-col h-full">
+          <div class="flex-1 min-h-0 overflow-hidden">
+            <SessionReviewTab
+              title={changesTitle()}
+              empty={reviewEmpty(input)}
+              diffs={reviewDiffs}
+              view={view}
+              diffStyle={input.diffStyle}
+              onDiffStyleChange={mobilePendingApproval() ? undefined : input.onDiffStyleChange}
+              onScrollRef={(el) => setTree("reviewScroll", el)}
+              focusedFile={tree.activeDiff}
+              onLineComment={(comment) => addCommentToContext({ ...comment, origin: "review" })}
+              onLineCommentUpdate={updateCommentInContext}
+              onLineCommentDelete={removeCommentFromContext}
+              lineCommentActions={reviewCommentActions()}
+              commentMentions={{
+                items: file.searchFilesAndDirectories,
+              }}
+              comments={comments.all()}
+              focusedComment={comments.focus()}
+              onFocusedCommentChange={comments.setFocus}
+              onViewFile={openReviewFile}
+              classes={input.classes}
+            />
+          </div>
+          <PendingActions />
+        </div>
+      </Show>
+    )
+  }
   const reviewPanel = () => (
     <div class="flex flex-col h-full overflow-hidden bg-background-stronger contain-strict">
       <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
@@ -1655,6 +1824,8 @@ export default function Page() {
         onMobileTabChange={(tab) => setStore("mobileTab", tab)}
         hasReview={hasReview}
         reviewCount={reviewCount}
+        pendingApproval={reviewingPendingPermission()}
+        onPendingApprovalBack={closePendingApproval}
       />
       <div class="flex-1 min-h-0 flex flex-col md:flex-row">
         {/* Session panel */}
@@ -1738,6 +1909,8 @@ export default function Page() {
               resumeScroll()
             }}
             onResponseSubmit={resumeScroll}
+            onReviewChanges={openPendingApproval}
+            hidePermissionDock={reviewingPendingPermission()}
             followup={
               params.id && !isChildSession()
                 ? {

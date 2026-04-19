@@ -394,7 +394,6 @@ export const SessionReview = (props: SessionReviewProps) => {
 
                     // binary files have empty diffs that we can't render
                     const diffCanRender = () => diff.additions !== 0 || diff.deletions !== 0
-
                     const expanded = createMemo(() => open().includes(file))
                     const mounted = createMemo(() => expanded() && (!!store.visible[file] || pinned(file)))
                     const force = () => !!store.force[file]
@@ -406,6 +405,11 @@ export const SessionReview = (props: SessionReviewProps) => {
                     const afterText = () => text(diff, "additions")
                     const changedLines = () => diff.additions + diff.deletions
                     const mediaKind = createMemo(() => mediaKindFromPath(file))
+                    const diffCanRender = () => {
+                      if (mediaKind()) return true
+                      if (diff.patch.trim().length > 0) return true
+                      return diff.additions + diff.deletions > 0
+                    }
 
                     const tooLarge = createMemo(() => {
                       if (!expanded()) return false

@@ -8,6 +8,8 @@ interface SessionHeaderResponsiveProps {
   onMobileTabChange: (tab: "session" | "changes") => void
   hasReview: () => boolean
   reviewCount: () => number
+  pendingApproval?: boolean
+  onPendingApprovalBack?: () => void
 }
 
 export function SessionHeaderResponsive(props: SessionHeaderResponsiveProps) {
@@ -22,6 +24,8 @@ export function SessionHeaderResponsive(props: SessionHeaderResponsiveProps) {
           onMobileTabChange={props.onMobileTabChange}
           hasReview={props.hasReview}
           reviewCount={props.reviewCount}
+          pendingApproval={props.pendingApproval}
+          onPendingApprovalBack={props.onPendingApprovalBack}
         />
       }
     >

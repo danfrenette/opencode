@@ -27,6 +27,8 @@ export function SessionComposerRegion(props: {
   onNewSessionWorktreeReset: () => void
   onSubmit: () => void
   onResponseSubmit: () => void
+  onReviewChanges?: () => void
+  hidePermissionDock?: boolean
   followup?: {
     queue: () => boolean
     items: { id: string; text: string }[]
@@ -158,19 +160,23 @@ export function SessionComposerRegion(props: {
           )}
         </Show>
 
-        <Show when={props.state.permissionRequest()} keyed>
-          {(request) => (
-            <div>
-              <SessionPermissionDock
-                request={request}
-                responding={props.state.permissionResponding()}
-                onDecide={(response) => {
-                  props.onResponseSubmit()
-                  props.state.decide(response)
-                }}
-              />
-            </div>
-          )}
+        <Show when={!props.hidePermissionDock}>
+          <Show when={props.state.permissionRequest()} keyed>
+            {(request) => (
+              <div>
+                <SessionPermissionDock
+                  request={request}
+                  responding={props.state.permissionResponding()}
+                  onDecide={(response) => {
+                    props.onResponseSubmit()
+                    props.state.decide(response)
+                  }}
+                  onReviewChanges={props.onReviewChanges}
+                  hasPendingDiffs={props.state.pendingDiffs().length > 0}
+                />
+              </div>
+            )}
+          </Show>
         </Show>
 
         <Show when={showComposer()}>

@@ -1,6 +1,8 @@
 import { createEffect, createMemo, on, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
-import type { PermissionRequest, QuestionRequest, Todo } from "@opencode-ai/sdk/v2"
+import type { PermissionRequest, QuestionRequest, Todo, SnapshotFileDiff, VcsFileDiff } from "@opencode-ai/sdk/v2"
+
+export type PendingDiff = SnapshotFileDiff | VcsFileDiff
 import { useParams } from "@solidjs/router"
 import { showToast } from "@opencode-ai/ui/toast"
 import { useGlobalSync } from "@/context/global-sync"
@@ -72,14 +74,66 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
     return store.responding === perm.id
   })
 
-  const decide = (response: "once" | "always" | "reject") => {
+  /**
+   * Normalizes pending edit permission metadata into reviewable diffs.
+   * Returns empty array if no pending edit permission or no metadata.
+   */
+  const pendingDiffs = createMemo((): PendingDiff[] => {
+    const perm = permissionRequest()
+    if (!perm || perm.permission !== "edit") return []
+    const metadata = perm.metadata as {
+      files?: Array<{
+        filePath: string
+        relativePath: string
+        type: "add" | "update" | "move" | "delete"
+        patch: string
+        additions: number
+        deletions: number
+        movePath?: string
+      }>
+      filepath?: string
+      diff?: string
+    } | undefined
+    if (!metadata) return []
+
+    // Prefer structured files array if available (apply_patch, updated edit/write)
+    if (metadata.files && metadata.files.length > 0) {
+      return metadata.files.map((f) => {
+        const status = f.type === "add" ? "added" : f.type === "delete" ? "deleted" : "modified" as const
+        return {
+          file: f.relativePath ?? f.filePath,
+          patch: f.patch,
+          additions: f.additions ?? 0,
+          deletions: f.deletions ?? 0,
+          status,
+          before: f.type === "add" ? undefined : "",
+          after: f.type === "delete" ? undefined : "",
+        }
+      })
+    }
+
+    // Fallback for legacy metadata shape (filepath + diff)
+    if (metadata.filepath && metadata.diff) {
+      return [{
+        file: metadata.filepath,
+        patch: metadata.diff,
+        additions: 0,
+        deletions: 0,
+        status: "modified" as const,
+      }]
+    }
+
+    return []
+  })
+
+  const decide = (response: "once" | "always" | "reject", message?: string) => {
     const perm = permissionRequest()
     if (!perm) return
     if (store.responding === perm.id) return
 
     setStore("responding", perm.id)
     sdk.client.permission
-      .respond({ sessionID: perm.sessionID, permissionID: perm.id, response })
+      .reply({ requestID: perm.id, reply: response, message })
       .catch((err: unknown) => {
         const description = err instanceof Error ? err.message : String(err)
         showToast({ title: language.t("common.requestFailed"), description })
@@ -181,6 +235,7 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
     permissionRequest,
     permissionResponding,
     decide,
+    pendingDiffs,
     todos,
     dock: () => store.dock,
     closing: () => store.closing,
@@ -188,4 +243,6 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
   }
 }
 
-export type SessionComposerState = ReturnType<typeof createSessionComposerState>
+export type SessionComposerState = Omit<ReturnType<typeof createSessionComposerState>, "pendingDiffs"> & {
+  pendingDiffs: () => PendingDiff[]
+}

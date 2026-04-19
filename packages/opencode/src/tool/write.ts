@@ -3,7 +3,7 @@ import * as path from "path"
 import { Effect } from "effect"
 import * as Tool from "./tool"
 import { LSP } from "@/lsp/lsp"
-import { createTwoFilesPatch } from "diff"
+import { createTwoFilesPatch, diffLines } from "diff"
 import DESCRIPTION from "./write.txt"
 import { Bus } from "../bus"
 import { File } from "../file"
@@ -51,13 +51,30 @@ export const WriteTool = Tool.define(
           const contentNew = next.text
 
           const diff = trimDiff(createTwoFilesPatch(filepath, filepath, contentOld, contentNew))
+          const relativePath = path.relative(instance.worktree, filepath).replaceAll("\\", "/")
+          let additions = 0
+          let deletions = 0
+          for (const change of diffLines(contentOld, contentNew)) {
+            if (change.added) additions += change.count || 0
+            if (change.removed) deletions += change.count || 0
+          }
           yield* ctx.ask({
             permission: "edit",
-            patterns: [path.relative(instance.worktree, filepath)],
+            patterns: [relativePath],
             always: ["*"],
             metadata: {
               filepath,
               diff,
+              files: [
+                {
+                  filePath: filepath,
+                  relativePath,
+                  type: exists ? "update" : "add",
+                  patch: diff,
+                  additions,
+                  deletions,
+                },
+              ],
             },
           })
 
