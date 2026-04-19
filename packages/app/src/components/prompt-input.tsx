@@ -1267,7 +1267,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   )
 
   return (
-    <div class="relative size-full _max-h-[320px] flex flex-col gap-0">
+    <div class="relative size-full _max-h-[320px] hidden md:flex flex-col gap-0">
       {(promptReady(), null)}
       <PromptPopover
         popover={store.popover}

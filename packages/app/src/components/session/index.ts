@@ -1,4 +1,7 @@
 export { SessionHeader } from "./session-header"
+export { SessionHeaderMobile } from "./session-header-mobile"
+export { SessionHeaderResponsive } from "./session-header-responsive"
+export { SessionFileTreeMobile } from "./session-file-tree-mobile"
 export { SessionContextTab } from "./session-context-tab"
 export { SortableTab, FileVisual } from "./session-sortable-tab"
 export { SortableTerminalTab } from "./session-sortable-terminal-tab"
