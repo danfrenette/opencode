@@ -55,13 +55,31 @@ export function DialogMobileComposerSettings(props: DialogMobileComposerSettings
   const openModelSelection = () => {
     if (providers.paid().length > 0) {
       void import("./dialog-select-model").then((x) => {
-        dialog.show(() => <x.DialogSelectModel model={local.model} />)
+        dialog.show(() => (
+          <x.DialogSelectModel
+            model={local.model}
+            onBack={() =>
+              dialog.show(() => (
+                <DialogMobileComposerSettings mode={props.mode} onModeChange={props.onModeChange} onClose={props.onClose} />
+              ))
+            }
+          />
+        ))
       })
       return
     }
 
     void import("./dialog-select-model-unpaid").then((x) => {
-      dialog.show(() => <x.DialogSelectModelUnpaid model={local.model} />)
+      dialog.show(() => (
+        <x.DialogSelectModelUnpaid
+          model={local.model}
+          onBack={() =>
+            dialog.show(() => (
+              <DialogMobileComposerSettings mode={props.mode} onModeChange={props.onModeChange} onClose={props.onClose} />
+            ))
+          }
+        />
+      ))
     })
   }
 
@@ -73,7 +91,15 @@ export function DialogMobileComposerSettings(props: DialogMobileComposerSettings
 
   const openAgentSelection = () => {
     void import("./dialog-select-agent").then((x) => {
-      dialog.show(() => <x.DialogSelectAgent />)
+      dialog.show(() => (
+        <x.DialogSelectAgent
+          onBack={() =>
+            dialog.show(() => (
+              <DialogMobileComposerSettings mode={props.mode} onModeChange={props.onModeChange} onClose={props.onClose} />
+            ))
+          }
+        />
+      ))
     })
   }
 
@@ -86,6 +112,11 @@ export function DialogMobileComposerSettings(props: DialogMobileComposerSettings
           onSelect={(value) => {
             local.model.variant.set(value)
           }}
+          onBack={() =>
+            dialog.show(() => (
+              <DialogMobileComposerSettings mode={props.mode} onModeChange={props.onModeChange} onClose={props.onClose} />
+            ))
+          }
         />
       ))
     })

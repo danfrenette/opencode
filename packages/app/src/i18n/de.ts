@@ -104,6 +104,7 @@ export const dict = {
   "dialog.provider.openrouter.note": "Zugriff auf alle unterstützten Modelle über einen Anbieter",
   "dialog.provider.vercel.note": "Einheitlicher Zugriff auf KI-Modelle mit intelligentem Routing",
   "dialog.model.select.title": "Modell auswählen",
+  "dialog.agent.select.title": "Agent auswählen",
   "dialog.model.search.placeholder": "Modelle durchsuchen",
   "dialog.model.empty": "Keine Modellergebnisse",
   "dialog.model.manage": "Modelle verwalten",

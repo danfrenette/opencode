@@ -100,6 +100,7 @@ export const dict = {
   "dialog.provider.openrouter.note": "1つのプロバイダーからすべてのサポートされているモデルにアクセス",
   "dialog.provider.vercel.note": "スマートルーターによるAIモデルへの統合アクセス",
   "dialog.model.select.title": "モデルを選択",
+  "dialog.agent.select.title": "エージェントを選択",
   "dialog.model.search.placeholder": "モデルを検索",
   "dialog.model.empty": "モデルが見つかりません",
   "dialog.model.manage": "モデルを管理",

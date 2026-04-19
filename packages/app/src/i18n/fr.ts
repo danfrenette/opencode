@@ -100,6 +100,7 @@ export const dict = {
   "dialog.provider.openrouter.note": "Accédez à tous les modèles pris en charge depuis un seul fournisseur",
   "dialog.provider.vercel.note": "Accès unifié aux modèles d'IA avec routage intelligent",
   "dialog.model.select.title": "Sélectionner un modèle",
+  "dialog.agent.select.title": "Sélectionner un agent",
   "dialog.model.search.placeholder": "Rechercher des modèles",
   "dialog.model.empty": "Aucun résultat de modèle",
   "dialog.model.manage": "Gérer les modèles",

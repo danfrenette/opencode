@@ -100,6 +100,7 @@ export const dict = {
   "dialog.provider.openrouter.note": "الوصول إلى جميع النماذج المدعومة من موفر واحد",
   "dialog.provider.vercel.note": "وصول موحد إلى نماذج الذكاء الاصطناعي مع توجيه ذكي",
   "dialog.model.select.title": "تحديد نموذج",
+  "dialog.agent.select.title": "تحديد وكيل",
   "dialog.model.search.placeholder": "البحث عن نماذج",
   "dialog.model.empty": "لا توجد نتائج للنماذج",
   "dialog.model.manage": "إدارة النماذج",

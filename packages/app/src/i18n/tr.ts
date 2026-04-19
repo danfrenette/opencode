@@ -113,6 +113,7 @@ export const dict = {
   "dialog.provider.vercel.note": "Akıllı yönlendirme ile yapay zekâ modellerine birleşik erişim",
 
   "dialog.model.select.title": "Model seç",
+  "dialog.agent.select.title": "Ajan seç",
   "dialog.model.search.placeholder": "Model ara",
   "dialog.model.empty": "Model sonucu yok",
   "dialog.model.manage": "Modelleri yönet",

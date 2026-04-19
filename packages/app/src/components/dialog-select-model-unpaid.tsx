@@ -1,6 +1,7 @@
 import { Button } from "@opencode-ai/ui/button"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Dialog } from "@opencode-ai/ui/dialog"
+import { IconButton } from "@opencode-ai/ui/icon-button"
 import { List, type ListRef } from "@opencode-ai/ui/list"
 import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
 import { Tag } from "@opencode-ai/ui/tag"
@@ -13,7 +14,7 @@ import { useLanguage } from "@/context/language"
 
 type ModelState = ReturnType<typeof useLocal>["model"]
 
-export const DialogSelectModelUnpaid: Component<{ model?: ModelState }> = (props) => {
+export const DialogSelectModelUnpaid: Component<{ model?: ModelState; onBack?: () => void }> = (props) => {
   const model = props.model ?? useLocal().model
   const dialog = useDialog()
   const providers = useProviders()
@@ -31,6 +32,17 @@ export const DialogSelectModelUnpaid: Component<{ model?: ModelState }> = (props
     })
   }
 
+  const manage = () => {
+    void import("./dialog-manage-models").then((x) => {
+      dialog.show(() => <x.DialogManageModels />)
+    })
+  }
+
+  const back = () => {
+    if (!props.onBack) return
+    props.onBack()
+  }
+
   let listRef: ListRef | undefined
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === "Escape") return
@@ -39,7 +51,41 @@ export const DialogSelectModelUnpaid: Component<{ model?: ModelState }> = (props
 
   return (
     <Dialog
-      title={language.t("dialog.model.select.title")}
+      title={
+        <div class="flex min-w-0 items-center gap-2">
+          <Show when={props.onBack}>
+            <IconButton
+              icon="arrow-left"
+              variant="ghost"
+              size="small"
+              class="size-8 rounded-lg"
+              aria-label={language.t("common.back")}
+              onClick={back}
+            />
+          </Show>
+          <span class="truncate">{language.t("dialog.model.select.title")}</span>
+        </div>
+      }
+      action={
+        <div class="flex items-center gap-1">
+          <IconButton
+            icon="plus-small"
+            variant="ghost"
+            size="small"
+            class="size-8 rounded-lg"
+            aria-label={language.t("command.provider.connect")}
+            onClick={all}
+          />
+          <IconButton
+            icon="settings-gear"
+            variant="ghost"
+            size="small"
+            class="size-8 rounded-lg"
+            aria-label={language.t("dialog.model.manage")}
+            onClick={manage}
+          />
+        </div>
+      }
       class="overflow-y-auto [&_[data-slot=dialog-body]]:overflow-visible [&_[data-slot=dialog-body]]:flex-none"
     >
       <div class="flex flex-col gap-3 px-2.5" onKeyDown={handleKeyDown}>

@@ -112,6 +112,7 @@ export const dict = {
   "dialog.provider.vercel.note": "Enhetlig tilgang til AI-modeller med smart ruting",
 
   "dialog.model.select.title": "Velg modell",
+  "dialog.agent.select.title": "Velg agent",
   "dialog.model.search.placeholder": "Søk etter modeller",
   "dialog.model.empty": "Ingen modellresultater",
   "dialog.model.manage": "Administrer modeller",

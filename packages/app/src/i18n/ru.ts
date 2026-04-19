@@ -109,6 +109,7 @@ export const dict = {
   "dialog.provider.vercel.note": "Единый доступ к ИИ-моделям с умной маршрутизацией",
 
   "dialog.model.select.title": "Выбрать модель",
+  "dialog.agent.select.title": "Выбрать агента",
   "dialog.model.search.placeholder": "Поиск моделей",
   "dialog.model.empty": "Модели не найдены",
   "dialog.model.manage": "Управление моделями",

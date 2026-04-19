@@ -109,6 +109,7 @@ export const dict = {
   "dialog.provider.vercel.note": "Samlet adgang til AI-modeller med smart routing",
 
   "dialog.model.select.title": "Vælg model",
+  "dialog.agent.select.title": "Vælg agent",
   "dialog.model.search.placeholder": "Søg modeller",
   "dialog.model.empty": "Ingen modeller fundet",
   "dialog.model.manage": "Administrer modeller",

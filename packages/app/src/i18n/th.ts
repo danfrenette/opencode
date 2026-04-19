@@ -109,6 +109,7 @@ export const dict = {
   "dialog.provider.vercel.note": "การเข้าถึงโมเดล AI แบบรวมด้วยการกำหนดเส้นทางอัจฉริยะ",
 
   "dialog.model.select.title": "เลือกโมเดล",
+  "dialog.agent.select.title": "เลือกเอเจนต์",
   "dialog.model.search.placeholder": "ค้นหาโมเดล",
   "dialog.model.empty": "ไม่พบผลลัพธ์โมเดล",
   "dialog.model.manage": "จัดการโมเดล",

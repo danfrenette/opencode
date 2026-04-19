@@ -196,7 +196,7 @@ export function ModelSelectorPopover(props: {
   )
 }
 
-export const DialogSelectModel: Component<{ provider?: string; model?: ModelState }> = (props) => {
+export const DialogSelectModel: Component<{ provider?: string; model?: ModelState; onBack?: () => void }> = (props) => {
   const dialog = useDialog()
   const language = useLanguage()
 
@@ -212,19 +212,50 @@ export const DialogSelectModel: Component<{ provider?: string; model?: ModelStat
     })
   }
 
+  const back = () => {
+    if (!props.onBack) return
+    props.onBack()
+  }
+
   return (
     <Dialog
-      title={language.t("dialog.model.select.title")}
+      title={
+        <div class="flex min-w-0 items-center gap-2">
+          <Show when={props.onBack}>
+            <IconButton
+              icon="arrow-left"
+              variant="ghost"
+              size="small"
+              class="size-8 rounded-lg"
+              aria-label={language.t("common.back")}
+              onClick={back}
+            />
+          </Show>
+          <span class="truncate">{language.t("dialog.model.select.title")}</span>
+        </div>
+      }
       action={
-        <Button class="h-7 -my-1 text-14-medium" icon="plus-small" tabIndex={-1} onClick={provider}>
-          {language.t("command.provider.connect")}
-        </Button>
+        <div class="flex items-center gap-1">
+          <IconButton
+            icon="plus-small"
+            variant="ghost"
+            size="small"
+            class="size-8 rounded-lg"
+            aria-label={language.t("command.provider.connect")}
+            onClick={provider}
+          />
+          <IconButton
+            icon="settings-gear"
+            variant="ghost"
+            size="small"
+            class="size-8 rounded-lg"
+            aria-label={language.t("dialog.model.manage")}
+            onClick={manage}
+          />
+        </div>
       }
     >
       <ModelList provider={props.provider} model={props.model} onSelect={() => dialog.close()} />
-      <Button variant="ghost" class="ml-3 mt-5 mb-6 text-text-base self-start" onClick={manage}>
-        {language.t("dialog.model.manage")}
-      </Button>
     </Dialog>
   )
 }

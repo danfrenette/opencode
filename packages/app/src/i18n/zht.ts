@@ -113,6 +113,7 @@ export const dict = {
   "dialog.provider.vercel.note": "透過智慧路由統一存取 AI 模型",
 
   "dialog.model.select.title": "選擇模型",
+  "dialog.agent.select.title": "選擇代理",
   "dialog.model.search.placeholder": "搜尋模型",
   "dialog.model.empty": "找不到模型",
   "dialog.model.manage": "管理模型",

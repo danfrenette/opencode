@@ -109,6 +109,7 @@ export const dict = {
   "dialog.provider.vercel.note": "Acceso unificado a modelos de IA con enrutamiento inteligente",
 
   "dialog.model.select.title": "Seleccionar modelo",
+  "dialog.agent.select.title": "Seleccionar agente",
   "dialog.model.search.placeholder": "Buscar modelos",
   "dialog.model.empty": "Sin resultados de modelos",
   "dialog.model.manage": "Gestionar modelos",

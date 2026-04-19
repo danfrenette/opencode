@@ -109,6 +109,7 @@ export const dict = {
   "dialog.provider.vercel.note": "Jedinstven pristup AI modelima uz pametno rutiranje",
 
   "dialog.model.select.title": "Odaberi model",
+  "dialog.agent.select.title": "Odaberi agenta",
   "dialog.model.search.placeholder": "Pretraži modele",
   "dialog.model.empty": "Nema rezultata za modele",
   "dialog.model.manage": "Upravljaj modelima",

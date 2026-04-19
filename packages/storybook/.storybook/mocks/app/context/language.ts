@@ -17,6 +17,7 @@ const dict: Record<string, string> = {
   "prompt.mode.shell": "Shell",
   "prompt.mode.normal": "Prompt",
   "dialog.model.select.title": "Select model",
+  "dialog.agent.select.title": "Select agent",
   "common.default": "Default",
   "common.key.esc": "Esc",
   "command.category.file": "File",
