@@ -59,6 +59,24 @@ import { DataMigration } from "@/data-migration"
 import { BackgroundJob } from "@/background/job"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { RuntimeFlags } from "@/effect/runtime-flags"
+import * as Effect from "effect/Effect"
+
+// Adjusts the default Config layer to ensure that plugins are always initialised before
+// any other layers read the current config
+const ConfigWithPluginPriority = Layer.effect(
+  Config.Service,
+  Effect.gen(function* () {
+    const config = yield* Config.Service
+    const plugin = yield* Plugin.Service
+
+    return {
+      ...config,
+      get: () => Effect.andThen(plugin.init(), config.get),
+      getGlobal: config.getGlobal,
+      getConsoleState: () => Effect.andThen(plugin.init(), config.getConsoleState),
+    }
+  }),
+).pipe(Layer.provide(Layer.merge(Plugin.defaultLayer, Config.defaultLayer)))
 
 export const AppLayer = Layer.mergeAll(
   Npm.defaultLayer,

@@ -4,8 +4,8 @@ import { useLocal } from "@/context/local"
 import { usePrompt, type ImageAttachmentPart } from "@/context/prompt"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
-import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
+import { usePermission } from "@/context/permission"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Button } from "@opencode-ai/ui/button"
@@ -14,7 +14,9 @@ import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { getFilenameTruncated } from "@opencode-ai/shared/util/path"
-import type { FollowupDraft } from "./prompt-input/submit"
+import { createPromptSubmit, type FollowupDraft } from "./prompt-input/submit"
+import { promptLength, prependHistoryEntry, type PromptHistoryStoredEntry } from "./prompt-input/history"
+import { Persist, persisted } from "@/utils/persist"
 
 interface PromptInputMobileProps {
   class?: string
@@ -37,19 +39,19 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
   const local = useLocal()
   const prompt = usePrompt()
   const dialog = useDialog()
-  const command = useCommand()
   const language = useLanguage()
+  const permission = usePermission()
   const { params } = useSessionLayout()
 
   let editorRef!: HTMLDivElement
 
   const [store, setStore] = createStore({
     mode: "normal" as "normal" | "shell",
-    text: "",
   })
 
   const currentPrompt = createMemo(() => prompt.current())
   const contextItems = createMemo(() => prompt.context.items())
+  const info = createMemo(() => (params.id ? sync.session.get(params.id) : undefined))
 
   // Extract text content from prompt
   const textContent = createMemo(() => {
@@ -65,7 +67,7 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
     return parts.filter((p): p is ImageAttachmentPart => p.type === "image")
   })
 
-  const blank = createMemo(() => !NON_EMPTY_TEXT.test(textContent()))
+  const blank = createMemo(() => !NON_EMPTY_TEXT.test(textContent()) && imageAttachments().length === 0)
 
   const working = createMemo(() => {
     const id = params.id
@@ -78,22 +80,55 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
     const id = params.id
     if (!id) return false
     const status = sync.data.session_status[id]
-    return status && status.type === "busy"
+    return !!status && status.type !== "idle" && blank()
   })
 
-  const canSubmit = createMemo(() => store.mode === "normal" && (!working() || !blank()))
+  const canSubmit = createMemo(() => working() || !blank())
+  const accepting = createMemo(() => {
+    const id = params.id
+    if (!id) return permission.isAutoAcceptingDirectory(sdk.directory)
+    return permission.isAutoAccepting(id, sdk.directory)
+  })
+  const [, setHistory] = persisted(
+    Persist.global("prompt-history", ["prompt-history.v1"]),
+    createStore<{ entries: PromptHistoryStoredEntry[] }>({
+      entries: [],
+    }),
+  )
+  const [, setShellHistory] = persisted(
+    Persist.global("prompt-history-shell", ["prompt-history-shell.v1"]),
+    createStore<{ entries: PromptHistoryStoredEntry[] }>({
+      entries: [],
+    }),
+  )
 
-  const handleSubmit = () => {
-    if (!canSubmit()) return
-    // Submit logic would go here - for now simplified
-    const text = editorRef?.textContent || ""
-    if (text.trim()) {
-      prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
-      editorRef.textContent = ""
-      setStore("text", "")
-      props.onSubmit?.()
-    }
-  }
+  const { handleSubmit } = createPromptSubmit({
+    info,
+    imageAttachments,
+    commentCount: () => 0,
+    autoAccept: accepting,
+    mode: () => store.mode,
+    working,
+    editor: () => editorRef,
+    queueScroll: () => {},
+    promptLength,
+    addToHistory: (nextPrompt, mode) => {
+      if (mode === "shell") {
+        setShellHistory("entries", (entries) => prependHistoryEntry(entries, nextPrompt))
+        return
+      }
+      setHistory("entries", (entries) => prependHistoryEntry(entries, nextPrompt))
+    },
+    resetHistoryNavigation: () => {},
+    setMode: (mode) => setStore("mode", mode),
+    setPopover: () => {},
+    newSessionWorktree: () => props.newSessionWorktree,
+    onNewSessionWorktreeReset: props.onNewSessionWorktreeReset,
+    shouldQueue: props.shouldQueue,
+    onQueue: props.onQueue,
+    onAbort: props.onAbort,
+    onSubmit: props.onSubmit,
+  })
 
   const toggleMode = () => {
     setStore("mode", store.mode === "normal" ? "shell" : "normal")
@@ -224,7 +259,6 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
             }}
             onInput={(e) => {
               const text = e.currentTarget.textContent || ""
-              setStore("text", text)
               // Update prompt state
               const parts = prompt.current()
               const textPart = parts.find((p) => p.type === "text")
@@ -245,7 +279,7 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault()
-                handleSubmit()
+                void handleSubmit(e)
               }
             }}
             role="textbox"
@@ -267,7 +301,7 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
             variant="primary"
             size="small"
             class="w-11 h-11 shrink-0 rounded-md"
-            onClick={handleSubmit}
+            onClick={(e) => void handleSubmit(e)}
             aria-label={stopping() ? language.t("prompt.action.stop") : language.t("prompt.action.send")}
           />
         </Tooltip>
