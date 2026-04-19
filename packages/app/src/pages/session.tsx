@@ -1050,12 +1050,8 @@ export default function Page() {
   }) => {
     const submitPendingDecision = (response: "once" | "always" | "reject", message?: string) => {
       composer.decide(response, message)
-      if (response !== "reject") {
-        setStore({ pendingApprovalReasonOpen: false, pendingApprovalReason: "" })
-        return
-      }
-      setStore("pendingApprovalReasonOpen", false)
-      setStore("pendingApprovalReason", "")
+      // Return to chat tab after decision (both allow and deny)
+      closePendingApproval()
     }
 
     const PendingActions = () => (

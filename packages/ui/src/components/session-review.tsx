@@ -514,8 +514,8 @@ export const SessionReview = (props: SessionReviewProps) => {
                         data-selected={props.focusedFile === file ? "" : undefined}
                       >
                         <StickyAccordionHeader>
-                          <Accordion.Trigger disabled={!diffCanRender()} class="cursor-default">
-                            <div data-slot="session-review-trigger-content">
+                          <Accordion.Trigger disabled={!diffCanRender()} class="cursor-default min-h-11">
+                            <div data-slot="session-review-trigger-content" class="py-2">
                               <div data-slot="session-review-file-info">
                                 <FileIcon node={{ path: file, type: "file" }} />
                                 <div data-slot="session-review-file-name-container">
