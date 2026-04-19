@@ -170,7 +170,7 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
 
   return (
     <div
-      class="flex flex-col border-t border-border-weak-base bg-background-base px-2 pt-2 pb-2"
+      class="flex flex-col border-t border-border-weak-base bg-background-base pt-2 pb-1"
       classList={{ [props.class || ""]: !!props.class }}
     >
       <Show when={contextItems().length > 0}>
@@ -237,7 +237,7 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
       <div class="overflow-hidden rounded-[12px] bg-background-stronger shadow-xs-border-base">
         <div class="relative min-h-[92px] px-3 pt-3 pb-12">
           <Show when={blank()}>
-            <div class="pointer-events-none absolute left-3 right-12 top-3 text-14-regular text-text-weak">
+            <div class="pointer-events-none absolute left-3 right-12 top-3 text-16-regular text-text-weak">
               {store.mode === "shell"
                 ? language.t("prompt.mode.shell")
                 : language.t("prompt.placeholder")}
@@ -246,7 +246,7 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
           <div
             ref={editorRef}
             contentEditable
-            class="min-h-[44px] max-h-[120px] overflow-y-auto bg-transparent pr-10 text-14-regular text-text-strong focus:outline-none"
+            class="min-h-[44px] max-h-[120px] overflow-y-auto bg-transparent pr-10 text-16-regular text-text-strong focus:outline-none"
             classList={{
               "font-mono": store.mode === "shell",
             }}
