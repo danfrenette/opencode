@@ -92,6 +92,13 @@ export const { use: useModels, provider: ModelsProvider } = createSimpleContext(
       return map
     })
 
+    const favorites = createMemo(() => store.user.filter((item) => item.favorite).map((item) => ({
+      providerID: item.providerID,
+      modelID: item.modelID,
+    })))
+
+    const favoriteSet = createMemo(() => new Set(favorites().map((item) => modelKey(item))))
+
     const list = createMemo(() =>
       available().map((m) => ({
         ...m,
@@ -102,13 +109,22 @@ export const { use: useModels, provider: ModelsProvider } = createSimpleContext(
 
     const find = (key: ModelKey) => list().find((m) => m.id === key.modelID && m.provider.id === key.providerID)
 
-    function update(model: ModelKey, state: Visibility) {
-      const index = store.user.findIndex((x) => x.modelID === model.modelID && x.providerID === model.providerID)
-      if (index >= 0) {
-        setStore("user", index, (current) => ({ ...current, visibility: state }))
-        return
-      }
-      setStore("user", store.user.length, { ...model, visibility: state })
+    function update(model: ModelKey, next: Partial<User>) {
+      setStore("user", (items) => {
+        const index = items.findIndex((x) => x.modelID === model.modelID && x.providerID === model.providerID)
+        const current = index >= 0 ? items[index] : undefined
+        const entry = {
+          ...model,
+          visibility: current?.visibility ?? "hide",
+          favorite: current?.favorite,
+          ...current,
+          ...next,
+        } satisfies User
+        if (index === -1) return [...items, entry]
+        const copy = items.slice()
+        copy[index] = entry
+        return copy
+      })
     }
 
     const visible = (model: ModelKey) => {
@@ -123,7 +139,15 @@ export const { use: useModels, provider: ModelsProvider } = createSimpleContext(
     }
 
     const setVisibility = (model: ModelKey, state: boolean) => {
-      update(model, state ? "show" : "hide")
+      update(model, { visibility: state ? "show" : "hide" })
+    }
+
+    const toggleFavorite = (model: ModelKey) => {
+      const next = !favoriteSet().has(modelKey(model))
+      update(model, {
+        favorite: next,
+        visibility: next ? "show" : undefined,
+      })
     }
 
     const push = (model: ModelKey) => {
@@ -150,6 +174,13 @@ export const { use: useModels, provider: ModelsProvider } = createSimpleContext(
       find,
       visible,
       setVisibility,
+      favorite: {
+        list: favorites,
+        has(model: ModelKey) {
+          return favoriteSet().has(modelKey(model))
+        },
+        toggle: toggleFavorite,
+      },
       recent: {
         list: createMemo(() => store.recent),
         push,

@@ -271,6 +271,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     const model = {
       ready: models.ready,
       current,
+      favorite() {
+        return models.favorite.list().map(models.find).filter(Boolean)
+      },
       recent,
       list: models.list,
       cycle(direction: 1 | -1) {
@@ -306,6 +309,12 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       },
       visible(item: ModelKey) {
         return models.visible(item)
+      },
+      hasFavorite(item: ModelKey) {
+        return models.favorite.has(item)
+      },
+      toggleFavorite(item: ModelKey) {
+        models.favorite.toggle(item)
       },
       setVisibility(item: ModelKey, visible: boolean) {
         models.setVisibility(item, visible)

@@ -27,6 +27,12 @@ const ModelList: Component<{
 }> = (props) => {
   const model = props.model ?? useLocal().model
   const language = useLanguage()
+  const [store, setStore] = createStore({
+    filter: "",
+  })
+
+  const showFavorites = createMemo(() => !props.provider && store.filter.trim().length === 0)
+  const favoritesLabel = createMemo(() => language.t("dialog.model.group.favorites"))
 
   const models = createMemo(() =>
     model
@@ -35,18 +41,30 @@ const ModelList: Component<{
       .filter((m) => (props.provider ? m.provider.id === props.provider : true)),
   )
 
+  const items = createMemo(() => {
+    if (!showFavorites()) return models()
+    const favorite = models().filter((item) => model.hasFavorite({ providerID: item.provider.id, modelID: item.id }))
+    const rest = models().filter((item) => !model.hasFavorite({ providerID: item.provider.id, modelID: item.id }))
+    return [...favorite, ...rest]
+  })
+
   return (
     <List
-      class={`flex-1 min-h-0 [&_[data-slot=list-scroll]]:flex-1 [&_[data-slot=list-scroll]]:min-h-0 ${props.class ?? ""}`}
+      class={`flex-1 min-h-0 [&_[data-slot=list-scroll]]:flex-1 [&_[data-slot=list-scroll]]:min-h-0 [&_[data-slot=list-item]]:min-h-14 [&_[data-slot=list-item]]:rounded-[14px] [&_[data-slot=list-item]]:px-3 [&_[data-slot=list-item]]:py-2 ${props.class ?? ""}`}
       search={{ placeholder: language.t("dialog.model.search.placeholder"), autofocus: true, action: props.action }}
       emptyMessage={language.t("dialog.model.empty")}
       key={(x) => `${x.provider.id}:${x.id}`}
-      items={models}
+      items={items}
       current={model.current()}
       filterKeys={["provider.name", "name", "id"]}
+      onFilter={(value) => setStore("filter", value)}
       sortBy={(a, b) => a.name.localeCompare(b.name)}
-      groupBy={(x) => x.provider.name}
+      groupBy={(x) =>
+        showFavorites() && model.hasFavorite({ providerID: x.provider.id, modelID: x.id }) ? favoritesLabel() : x.provider.name
+      }
       sortGroupsBy={(a, b) => {
+        if (a.category === favoritesLabel()) return -1
+        if (b.category === favoritesLabel()) return 1
         const aProvider = a.items[0].provider.id
         const bProvider = b.items[0].provider.id
         if (popularProviders.includes(aProvider) && !popularProviders.includes(bProvider)) return -1
@@ -69,18 +87,36 @@ const ModelList: Component<{
         })
         props.onSelect()
       }}
-    >
-      {(i) => (
-        <div class="w-full flex items-center gap-x-2 text-13-regular">
-          <span class="truncate">{i.name}</span>
-          <Show when={isFree(i.provider.id, i.cost)}>
-            <Tag>{language.t("model.tag.free")}</Tag>
-          </Show>
-          <Show when={i.latest}>
-            <Tag>{language.t("model.tag.latest")}</Tag>
-          </Show>
-        </div>
-      )}
+      >
+        {(i) => (
+          <div class="flex w-full min-w-0 items-center gap-2 text-13-regular">
+            <div class="flex min-w-0 flex-1 items-center gap-x-2">
+              <span class="truncate">{i.name}</span>
+              <Show when={isFree(i.provider.id, i.cost)}>
+                <Tag>{language.t("model.tag.free")}</Tag>
+              </Show>
+              <Show when={i.latest}>
+                <Tag>{language.t("model.tag.latest")}</Tag>
+              </Show>
+            </div>
+            <IconButton
+              icon={model.hasFavorite({ providerID: i.provider.id, modelID: i.id }) ? "star-filled" : "star"}
+              variant="ghost"
+              size="small"
+              class="size-11 rounded-xl"
+              aria-label={
+                model.hasFavorite({ providerID: i.provider.id, modelID: i.id })
+                  ? language.t("dialog.model.unfavorite")
+                  : language.t("dialog.model.favorite")
+              }
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation()
+                model.toggleFavorite({ providerID: i.provider.id, modelID: i.id })
+              }}
+            />
+          </div>
+        )}
     </List>
   )
 }
