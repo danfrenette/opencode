@@ -40,7 +40,7 @@ const captureResponseBody = (response: HttpClientResponse.HttpClientResponse, co
     : response.text.pipe(Effect.map((body) => ({ body })))
 
 const decodeResponseBody = (snapshot: ResponseSnapshot) =>
-  snapshot.bodyEncoding === "base64" ? Buffer.from(snapshot.body, "base64") : snapshot.body
+  snapshot.bodyEncoding === "base64" ? Uint8Array.from(Buffer.from(snapshot.body, "base64")) : snapshot.body
 
 export const redactedErrorRequest = (request: HttpClientRequest.HttpClientRequest) =>
   HttpClientRequest.makeWith(
