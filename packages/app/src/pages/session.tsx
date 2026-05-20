@@ -486,10 +486,14 @@ export default function Page() {
    */
   const pendingPermissionDiffs = createMemo(() => composer.pendingDiffs())
   const hasPendingPermissionDiffs = createMemo(() => pendingPermissionDiffs().length > 0)
-  const pendingPermissionFiles = createMemo(() => pendingPermissionDiffs().map((diff) => diff.file))
+  const pendingPermissionFiles = createMemo(() =>
+    pendingPermissionDiffs()
+      .map((diff) => diff.file)
+      .filter((file): file is string => file !== undefined),
+  )
   const pendingApprovalActive = createMemo(() => hasPendingPermissionDiffs() && store.pendingApprovalEntered)
-  const reviewingPendingPermission = createMemo(() =>
-    pendingApprovalActive() && (isDesktop() ? view().reviewPanel.opened() : store.mobileTab === "changes"),
+  const reviewingPendingPermission = createMemo(
+    () => pendingApprovalActive() && (isDesktop() ? view().reviewPanel.opened() : store.mobileTab === "changes"),
   )
   const mobilePendingApproval = createMemo(() => reviewingPendingPermission() && !isDesktop())
 
@@ -535,6 +539,8 @@ export default function Page() {
       return vcsQuery.isFetched ? (vcsQuery.data ?? []) : []
     return turnDiffs()
   }
+  const reviewFileTreeDiffs = () =>
+    reviewDiffs().filter((diff): diff is typeof diff & { file: string } => diff.file !== undefined)
   const reviewCount = () => reviewDiffs().length
   const hasReview = () => reviewCount() > 0
   const reviewReady = () => {
@@ -969,11 +975,7 @@ export default function Page() {
 
     // When viewing pending permission diffs, show a static title
     if (hasPendingPermissionDiffs()) {
-      return (
-        <span class="text-14-medium text-text-strong">
-          {language.t("ui.sessionReview.title.pendingApproval")}
-        </span>
-      )
+      return <span class="text-14-medium text-text-strong">{language.t("ui.sessionReview.title.pendingApproval")}</span>
     }
 
     const label = (option: ChangeMode) => {
@@ -1961,7 +1963,7 @@ export default function Page() {
 
         {/* Mobile/Tablet File Tree - only renders on non-desktop */}
         <SessionFileTreeMobile
-          diffs={reviewDiffs}
+          diffs={reviewFileTreeDiffs}
           diffsReady={reviewReady}
           hasReview={hasReview}
           reviewCount={reviewCount}

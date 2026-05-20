@@ -13,7 +13,7 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
-import { getFilenameTruncated } from "@opencode-ai/shared/util/path"
+import { getFilenameTruncated } from "@opencode-ai/core/util/path"
 import { createPromptSubmit, type FollowupDraft } from "./prompt-input/submit"
 import { promptLength, prependHistoryEntry, type PromptHistoryStoredEntry } from "./prompt-input/history"
 import { Persist, persisted } from "@/utils/persist"
@@ -56,7 +56,8 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
   // Extract text content from prompt
   const textContent = createMemo(() => {
     const parts = currentPrompt()
-    return parts.filter((p): p is { type: "text"; content: string; start: number; end: number } => p.type === "text")
+    return parts
+      .filter((p): p is { type: "text"; content: string; start: number; end: number } => p.type === "text")
       .map((p) => p.content)
       .join("")
   })
@@ -136,7 +137,9 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
 
   const openSettings = () => {
     void import("./dialog-mobile-composer-settings").then((x) => {
-      dialog.show(() => <x.DialogMobileComposerSettings mode={store.mode} onModeChange={(mode) => setStore("mode", mode)} />)
+      dialog.show(() => (
+        <x.DialogMobileComposerSettings mode={store.mode} onModeChange={(mode) => setStore("mode", mode)} />
+      ))
     })
   }
 
@@ -160,7 +163,9 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
     store.mode === "shell" ? language.t("prompt.mode.shell") : language.t("prompt.mode.normal"),
   )
 
-  const providerLabel = createMemo(() => local.model.current()?.provider?.name || local.agent.current()?.name || "Default")
+  const providerLabel = createMemo(
+    () => local.model.current()?.provider?.name || local.agent.current()?.name || "Default",
+  )
 
   const removeImage = (id: string) => {
     const current = prompt.current()
@@ -238,9 +243,7 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
         <div class="relative min-h-[92px] px-3 pt-3 pb-12">
           <Show when={blank()}>
             <div class="pointer-events-none absolute left-3 right-12 top-3 text-16-regular text-text-weak">
-              {store.mode === "shell"
-                ? language.t("prompt.mode.shell")
-                : language.t("prompt.placeholder")}
+              {store.mode === "shell" ? language.t("prompt.mode.shell") : language.t("prompt.placeholder")}
             </div>
           </Show>
           <div
@@ -256,9 +259,7 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
               const textPart = parts.find((p) => p.type === "text")
               if (textPart) {
                 prompt.set(
-                  parts.map((p) =>
-                    p.type === "text" ? { ...p, content: text, start: 0, end: text.length } : p,
-                  ),
+                  parts.map((p) => (p.type === "text" ? { ...p, content: text, start: 0, end: text.length } : p)),
                   text.length,
                 )
                 return
@@ -295,7 +296,10 @@ export const PromptInputMobile: Component<PromptInputMobileProps> = (props) => {
           </div>
 
           <div class="pointer-events-none absolute bottom-2 right-2">
-            <Tooltip placement="top" value={stopping() ? language.t("prompt.action.stop") : language.t("prompt.action.send")}>
+            <Tooltip
+              placement="top"
+              value={stopping() ? language.t("prompt.action.stop") : language.t("prompt.action.send")}
+            >
               <IconButton
                 data-action="prompt-submit"
                 type="submit"
