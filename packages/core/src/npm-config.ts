@@ -1,6 +1,6 @@
 export * as NpmConfig from "./npm-config"
 
-import { fileURLToPath } from "url"
+import { fileURLToPath, URL } from "url"
 // @ts-expect-error npm does not publish types for this internal config API.
 import Config from "@npmcli/config"
 // @ts-expect-error npm does not publish types for this internal config API.

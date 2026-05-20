@@ -47,8 +47,9 @@ export function sanitize(pkg: string) {
 const resolveEntryPoint = (name: string, dir: string): EntryPoint => {
   let entrypoint: Option.Option<string>
   try {
-    const resolved = typeof Bun !== "undefined" ? import.meta.resolve(name, dir) : import.meta.resolve(dir)
-    entrypoint = Option.some(resolved)
+    const resolve = import.meta.resolve as ((specifier: string, parent?: string) => string) | undefined
+    const resolved = typeof Bun !== "undefined" ? resolve?.(name, dir) : resolve?.(dir)
+    entrypoint = resolved ? Option.some(resolved) : Option.none()
   } catch {
     entrypoint = Option.none()
   }
