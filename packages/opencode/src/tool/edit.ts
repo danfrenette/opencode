@@ -99,13 +99,30 @@ export const EditTool = Tool.define(
                 contentOld = ""
                 contentNew = next.text
                 diff = trimDiff(createTwoFilesPatch(filePath, filePath, contentOld, contentNew))
+                const relativePath = path.relative(instance.worktree, filePath).replaceAll("\\", "/")
+                let additions = 0
+                let deletions = 0
+                for (const change of diffLines(contentOld, contentNew)) {
+                  if (change.added) additions += change.count || 0
+                  if (change.removed) deletions += change.count || 0
+                }
                 yield* ctx.ask({
                   permission: "edit",
-                  patterns: [path.relative(instance.worktree, filePath)],
+                  patterns: [relativePath],
                   always: ["*"],
                   metadata: {
                     filepath: filePath,
                     diff,
+                    files: [
+                      {
+                        filePath,
+                        relativePath,
+                        type: "add",
+                        patch: diff,
+                        additions,
+                        deletions,
+                      },
+                    ],
                   },
                 })
                 yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))
@@ -142,13 +159,30 @@ export const EditTool = Tool.define(
                   normalizeLineEndings(contentNew),
                 ),
               )
+              const relativePath = path.relative(instance.worktree, filePath).replaceAll("\\", "/")
+              let additions = 0
+              let deletions = 0
+              for (const change of diffLines(contentOld, contentNew)) {
+                if (change.added) additions += change.count || 0
+                if (change.removed) deletions += change.count || 0
+              }
               yield* ctx.ask({
                 permission: "edit",
-                patterns: [path.relative(instance.worktree, filePath)],
+                patterns: [relativePath],
                 always: ["*"],
                 metadata: {
                   filepath: filePath,
                   diff,
+                  files: [
+                    {
+                      filePath,
+                      relativePath,
+                      type: "update",
+                      patch: diff,
+                      additions,
+                      deletions,
+                    },
+                  ],
                 },
               })
 

@@ -1,6 +1,6 @@
 import { createEffect, createMemo, on, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
-import type { PermissionRequest, QuestionRequest, Todo } from "@opencode-ai/sdk/v2"
+import type { PermissionRequest, QuestionRequest, Todo, VcsFileDiff } from "@opencode-ai/sdk/v2"
 import { useParams } from "@solidjs/router"
 import { showToast } from "@/utils/toast"
 import { useServerSync } from "@/context/server-sync"
@@ -24,6 +24,8 @@ export const todoState = (input: {
 export const todoDockAtBoundary = (state: ReturnType<typeof todoState>) => state === "open"
 
 const idle = { type: "idle" as const }
+
+export type PendingDiff = VcsFileDiff
 
 export function createSessionComposerController(options?: { closeMs?: number | (() => number) }) {
   const params = useParams()
@@ -75,14 +77,59 @@ export function createSessionComposerController(options?: { closeMs?: number | (
     return store.responding === perm.id
   })
 
-  const decide = (response: "once" | "always" | "reject") => {
+  const pendingDiffs = createMemo((): PendingDiff[] => {
+    const perm = permissionRequest()
+    if (!perm || perm.permission !== "edit") return []
+    const metadata = perm.metadata as
+      | {
+          files?: Array<{
+            filePath: string
+            relativePath?: string
+            type: "add" | "update" | "move" | "delete"
+            patch: string
+            additions: number
+            deletions: number
+            movePath?: string
+          }>
+          filepath?: string
+          diff?: string
+        }
+      | undefined
+    if (!metadata) return []
+
+    if (metadata.files && metadata.files.length > 0) {
+      return metadata.files.map((f) => ({
+        file: f.relativePath ?? f.filePath,
+        patch: f.patch,
+        additions: f.additions ?? 0,
+        deletions: f.deletions ?? 0,
+        status: f.type === "add" ? ("added" as const) : f.type === "delete" ? ("deleted" as const) : ("modified" as const),
+      }))
+    }
+
+    if (metadata.filepath && metadata.diff) {
+      return [
+        {
+          file: metadata.filepath,
+          patch: metadata.diff,
+          additions: 0,
+          deletions: 0,
+          status: "modified" as const,
+        },
+      ]
+    }
+
+    return []
+  })
+
+  const decide = (response: "once" | "always" | "reject", message?: string) => {
     const perm = permissionRequest()
     if (!perm) return
     if (store.responding === perm.id) return
 
     setStore("responding", perm.id)
     sdk()
-      .api.permission.reply({ sessionID: perm.sessionID, requestID: perm.id, reply: response })
+      .api.permission.reply({ sessionID: perm.sessionID, requestID: perm.id, reply: response, message })
       .catch((err: unknown) => {
         const description = err instanceof Error ? err.message : String(err)
         showToast({ title: language.t("common.requestFailed"), description })
@@ -191,6 +238,7 @@ export function createSessionComposerController(options?: { closeMs?: number | (
     permissionRequest,
     permissionResponding,
     decide,
+    pendingDiffs,
     todos,
     dock: () =>
       store.sessionID === params.id

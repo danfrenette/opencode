@@ -11,6 +11,8 @@ import type { SessionComposerRegionController } from "./session-composer-region-
 export function SessionComposerRegion(props: {
   controller: SessionComposerRegionController
   promptInput: JSX.Element
+  onReviewChanges?: () => void
+  hidePermissionDock?: boolean
 }) {
   const language = useLanguage()
   const controller = props.controller
@@ -44,19 +46,23 @@ export function SessionComposerRegion(props: {
           )}
         </Show>
 
-        <Show when={controller.state.permissionRequest()} keyed>
-          {(request) => (
-            <div>
-              <SessionPermissionDock
-                request={request}
-                responding={controller.state.permissionResponding()}
-                onDecide={(response) => {
-                  controller.onResponseSubmit()
-                  controller.state.decide(response)
-                }}
-              />
-            </div>
-          )}
+        <Show when={!props.hidePermissionDock}>
+          <Show when={controller.state.permissionRequest()} keyed>
+            {(request) => (
+              <div>
+                <SessionPermissionDock
+                  request={request}
+                  responding={controller.state.permissionResponding()}
+                  onDecide={(response, message) => {
+                    controller.onResponseSubmit()
+                    controller.state.decide(response, message)
+                  }}
+                  onReviewChanges={props.onReviewChanges}
+                  hasPendingDiffs={controller.state.pendingDiffs().length > 0}
+                />
+              </div>
+            )}
+          </Show>
         </Show>
 
         <Show when={controller.showComposer()}>
