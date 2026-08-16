@@ -44,20 +44,14 @@ benchmark.describe("performance: review pane scaling", () => {
         const patchByteLimit = Number(process.env.REVIEW_PANE_PATCH_BYTE_LIMIT ?? Number.POSITIVE_INFINITY)
         if (Number.isNaN(patchByteLimit) || patchByteLimit < 0)
           throw new Error(`Invalid REVIEW_PANE_PATCH_BYTE_LIMIT: ${process.env.REVIEW_PANE_PATCH_BYTE_LIMIT}`)
-        const responseBody = JSON.stringify(createScalingDiffs(fileCount, patchByteLimit))
+        const diffs = createScalingDiffs(fileCount, patchByteLimit)
+        const responseBody = JSON.stringify(diffs)
         await setupTimelineBenchmark(page, {
           historyTurns: 0,
           eventBatch: 1,
           newLayoutDesigns: true,
+          vcsDiff: diffs,
         })
-        await page.route("**/vcs/diff**", (route) =>
-          route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            headers: { "access-control-allow-origin": "*" },
-            body: responseBody,
-          }),
-        )
 
         const expectedRows = fileCount + 2 + Math.ceil(fileCount / filesPerDirectory)
         const metrics = await measureReviewPaneLoad(page, {
