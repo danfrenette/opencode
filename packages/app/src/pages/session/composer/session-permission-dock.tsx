@@ -1,4 +1,4 @@
-import { createEffect, For, Match, onMount, Show, Switch } from "solid-js"
+import { For, Match, onMount, Show, Switch } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { PermissionRequest } from "@opencode-ai/client/promise"
 import { Button } from "@opencode-ai/ui/button"
@@ -15,7 +15,6 @@ import type { PermissionDecision } from "./session-permission-decision"
 type PermissionStage = "permission" | "always" | "reject"
 type PermissionFocusTarget = "once" | "always" | "reject" | "confirm" | "feedback"
 type PermissionDockState = {
-  requestID: string
   stage: PermissionStage
   message: string
   file?: string
@@ -28,7 +27,6 @@ const requestFiles = (request: PermissionRequest) => {
 
 const initialState = (request: PermissionRequest) =>
   ({
-    requestID: request.id,
     stage: "permission",
     message: "",
     file: requestFiles(request)?.[0]?.file,
@@ -51,11 +49,6 @@ export function SessionPermissionDock(props: {
       additions: diff.additions,
       deletions: diff.deletions,
     })
-
-  createEffect(() => {
-    if (store.requestID === props.request.id) return
-    setStore(initialState(props.request))
-  })
 
   const focus = (target: PermissionFocusTarget) => queueMicrotask(() => actions[target]?.focus())
   onMount(() => focus("once"))

@@ -36,20 +36,32 @@ describe("diffs", () => {
 })
 
 describe("canonicalDiffs", () => {
-  test("keeps canonical file metadata arrays", () => {
-    expect(canonicalDiffs([item])).toEqual([item])
+  test.each(["added", "deleted", "modified"] as const)("accepts the %s status", (status) => {
+    const value = { ...item, status }
+    expect(canonicalDiffs([value])).toEqual([value])
+  })
+
+  test("accepts empty arrays", () => {
     expect(canonicalDiffs([])).toEqual([])
   })
 
-  test("rejects non-array metadata", () => {
-    expect(canonicalDiffs(item)).toBeUndefined()
-    expect(canonicalDiffs({ file: item })).toBeUndefined()
-    expect(canonicalDiffs(undefined)).toBeUndefined()
-  })
+  test.each([
+    ["null", null],
+    ["string", "files"],
+    ["number", 1],
+    ["boolean", true],
+    ["object", { file: item }],
+    ["undefined", undefined],
+  ])("rejects %s metadata", (_name, value) => expect(canonicalDiffs(value)).toBeUndefined())
 
-  test("rejects an array when any entry is malformed", () => {
+  test("rejects mixed valid and malformed arrays atomically", () => {
     expect(canonicalDiffs([item, { ...item, patch: undefined }])).toBeUndefined()
     expect(canonicalDiffs([item, null])).toBeUndefined()
+  })
+
+  test("rejects invalid arrays", () => {
+    expect(canonicalDiffs([null])).toBeUndefined()
+    expect(canonicalDiffs(["file"])).toBeUndefined()
   })
 
   test("requires canonical status and non-negative integer counts", () => {
