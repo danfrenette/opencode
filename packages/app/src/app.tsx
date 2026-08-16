@@ -240,6 +240,7 @@ export function AppInterface(props: {
   defaultServer: ServerConnection.Key
   canonicalLocalServer?: ServerConnection.Key
   servers?: Array<ServerConnection.Any>
+  activateDefaultServer?: boolean
   router?: Component<BaseRouterProps>
 }) {
   // The visual layout lives in the router root so it remains mounted across
@@ -263,6 +264,7 @@ export function AppInterface(props: {
       defaultServer={props.defaultServer}
       canonicalLocalServer={props.canonicalLocalServer}
       servers={props.servers}
+      activateDefaultServer={props.activateDefaultServer}
     >
       <SettingsProvider>
         <GlobalProvider>

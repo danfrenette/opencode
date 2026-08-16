@@ -25,6 +25,15 @@ export default defineConfig({
     host: "0.0.0.0",
     allowedHosts: true,
     port: 3000,
+    proxy: process.env.OPENCODE_DEV_SERVER_URL
+      ? {
+          "/api": {
+            target: process.env.OPENCODE_DEV_SERVER_URL,
+            changeOrigin: true,
+            ws: true,
+          },
+        }
+      : undefined,
   },
   build: {
     target: "esnext",

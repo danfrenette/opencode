@@ -6,7 +6,8 @@ import { fileURLToPath } from "url"
 const root = fileURLToPath(new URL("../../..", import.meta.url))
 const localUrl = "http://localhost:4444"
 
-const server = discoverService()
+const server = backendServer()
+await requireBackend(server)
 await requireLocalPort()
 const vite = startVite(server)
 
@@ -25,28 +26,27 @@ try {
   await vite.exited
 }
 
-function discoverService() {
-  const discovery = Bun.spawnSync(["opencode2", "service", "status"], {
-    cwd: root,
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  if (discovery.exitCode !== 0)
-    throw new Error("The installed opencode2 service is unavailable. Start it separately and retry.")
-
-  const discovered = discovery.stdout.toString().trim()
-  if (discovered === "stopped")
-    throw new Error("The installed opencode2 service is unavailable. Start it separately and retry.")
-  if (!URL.canParse(discovered)) throw new Error("opencode2 service status did not return a valid HTTP URL.")
-
-  const server = new URL(discovered)
+function backendServer() {
+  const value = process.env.OPENCODE_DEV_SERVER_URL ?? "http://127.0.0.1:4096"
+  if (!URL.canParse(value)) throw new Error("OPENCODE_DEV_SERVER_URL must be a valid HTTP origin URL.")
+  const server = new URL(value)
   if (server.protocol !== "http:" || !server.hostname) {
-    throw new Error("opencode2 service status did not return a valid HTTP origin URL.")
+    throw new Error("OPENCODE_DEV_SERVER_URL must be a valid HTTP origin URL.")
   }
   if (server.username || server.password || server.pathname !== "/" || server.search || server.hash) {
-    throw new Error("opencode2 service status did not return a valid HTTP origin URL.")
+    throw new Error("OPENCODE_DEV_SERVER_URL must be a valid HTTP origin URL.")
   }
   return server
+}
+
+async function requireBackend(server: URL) {
+  const response = await fetch(new URL("/api/health", server), { redirect: "manual" }).catch(() => undefined)
+  if (response?.ok || (response?.status === 401 && response.headers.get("www-authenticate")?.startsWith("Basic"))) {
+    await response.body?.cancel()
+    return
+  }
+  await response?.body?.cancel()
+  throw new Error(`The OpenCode server at ${server.origin} is unavailable. Start it separately and retry.`)
 }
 
 async function requireLocalPort() {
@@ -62,8 +62,10 @@ function startVite(server: URL) {
     cwd: join(root, "packages/app"),
     env: {
       ...process.env,
-      VITE_OPENCODE_SERVER_HOST: server.hostname,
-      VITE_OPENCODE_SERVER_PORT: server.port || "80",
+      OPENCODE_DEV_SERVER_URL: server.origin,
+      VITE_OPENCODE_PROXY: "true",
+      VITE_OPENCODE_SERVER_HOST: "localhost",
+      VITE_OPENCODE_SERVER_PORT: "4444",
     },
     stdin: "inherit",
     stdout: "inherit",
@@ -88,8 +90,7 @@ async function waitForVite(vite: Bun.Subprocess) {
 }
 
 async function openBrowser() {
-  const url = `${localUrl}/?auth_token=${encodeURIComponent(btoa(`opencode:${readPassword()}`))}`
-  if ((await Bun.spawn(browserCommand(url), { stdout: "ignore", stderr: "ignore" }).exited) !== 0) {
+  if ((await Bun.spawn(browserCommand(localUrl), { stdout: "ignore", stderr: "ignore" }).exited) !== 0) {
     throw new Error("Could not open the local web app in a browser.")
   }
 }
@@ -99,17 +100,4 @@ function browserCommand(url: string) {
   if (process.platform === "darwin") return ["open", url]
   if (process.platform === "win32") return ["explorer.exe", url]
   return ["xdg-open", url]
-}
-
-function readPassword() {
-  const credential = Bun.spawnSync(["opencode2", "service", "get", "password"], {
-    cwd: root,
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  if (credential.exitCode !== 0) throw new Error("Could not read credentials from the installed opencode2 service.")
-
-  const password = credential.stdout.toString().trim()
-  if (!password) throw new Error("The installed opencode2 service returned an empty password.")
-  return password
 }

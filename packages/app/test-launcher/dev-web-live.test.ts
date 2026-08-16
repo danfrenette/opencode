@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { chmodSync, mkdtempSync, rmSync } from "fs"
-import { get } from "http"
+import { createServer, request } from "http"
 import { tmpdir } from "os"
-import { delimiter, join } from "path"
+import { join } from "path"
 
 const launcher = join(import.meta.dir, "../script/dev-web-live.ts")
 const localUrl = "http://127.0.0.1:4444"
@@ -13,56 +13,67 @@ afterEach(() => {
 })
 
 describe("dev:web:live", () => {
-  test("fails clearly when the installed service is stopped", async () => {
-    const result = await runLauncher("stopped")
+  test("fails clearly when the backend is unavailable", async () => {
+    const result = await runLauncher("http://127.0.0.1:1")
 
     expect(result.exitCode).not.toBe(0)
-    expect(result.stderr).toContain("error: The installed opencode2 service is unavailable")
-    expect(result.stderr).not.toContain("error: opencode2 service status did not return a valid HTTP URL")
+    expect(result.stderr).toContain("error: The OpenCode server at http://127.0.0.1:1 is unavailable")
     expect(result.stdout).toBe("")
   })
 
-  test("rejects malformed service discovery output", async () => {
-    const result = await runLauncher("malformed")
+  test("rejects a malformed backend URL", async () => {
+    const result = await runLauncher("not a URL")
 
     expect(result.exitCode).not.toBe(0)
-    expect(result.stderr).toContain("error: opencode2 service status did not return a valid HTTP URL")
+    expect(result.stderr).toContain("error: OPENCODE_DEV_SERVER_URL must be a valid HTTP origin URL")
   })
 
   test("fails clearly when port 4444 is occupied", async () => {
-    using _server = Bun.serve({ hostname: "127.0.0.1", port: 4444, fetch: () => new Response() })
-    const result = await runLauncher("available")
+    await using backend = await createBackend()
+    using _local = Bun.serve({ hostname: "127.0.0.1", port: 4444, fetch: () => new Response() })
+    const result = await runLauncher(backend.url.origin)
 
     expect(result.exitCode).not.toBe(0)
     expect(result.stderr).toContain("error: Port 4444 is already in use")
   })
 
-  test("launches Vite with authenticated browser bootstrap and cleans up on exit", async () => {
+  test("proxies browser authentication to the existing backend and cleans up on exit", async () => {
+    await using backend = await createBackend()
     const fixture = await createFixture()
-    const marker = join(fixture.directory, "browser.json")
-    const serviceMarker = join(fixture.directory, "service.txt")
-    const child = spawnLauncher(fixture, "available", {
+    const marker = join(fixture.directory, "browser.txt")
+    const child = spawnLauncher(backend.url.origin, {
       BROWSER: fixture.browser,
       OPENCODE_BROWSER_MARKER: marker,
-      OPENCODE_SERVICE_MARKER: serviceMarker,
     })
+    const completed = output(child)
+    let failure: unknown
 
     try {
       await waitFor(() => Bun.file(marker).exists())
-      expect(await Bun.file(marker).json()).toEqual({
-        origin: "http://localhost:4444",
-        username: "opencode",
-        passwordMatches: true,
+      expect(await Bun.file(marker).text()).toBe("http://localhost:4444")
+
+      const challenge = await requestUrl(`${localUrl}/api/health`)
+      expect(challenge).toMatchObject({
+        status: 401,
+        headers: { "www-authenticate": 'Basic realm="Secure Area"' },
       })
-      expect(await Bun.file(serviceMarker).text()).toBe("service status\nservice get password\n")
-      const entry = await readUrl(`${localUrl}/src/entry.tsx`)
-      expect(entry).toContain('"127.0.0.1"')
-      expect(entry).toContain('"54321"')
+
+      const authorization = `Basic ${btoa("opencode:live-web-secret")}`
+      const authenticated = await requestUrl(`${localUrl}/api/health`, { authorization })
+      expect(authenticated.status).toBe(200)
+      expect(JSON.parse(authenticated.body)).toEqual({ healthy: true })
+      expect(backend.requests.at(-1)).toEqual({ path: "/api/health", authorization })
+    } catch (error) {
+      failure = error
     } finally {
       child.kill("SIGTERM")
     }
 
-    const result = await output(child)
+    const result = await completed
+    if (failure) {
+      console.error(result.stdout, result.stderr)
+      throw failure
+    }
     expect(result.stdout + result.stderr).not.toContain("live-web-secret")
     expect(result.stdout + result.stderr).not.toContain("auth_token")
     using port = Bun.serve({ hostname: "127.0.0.1", port: 4444, fetch: () => new Response() })
@@ -70,21 +81,15 @@ describe("dev:web:live", () => {
   }, 15_000)
 })
 
-async function runLauncher(service: "available" | "malformed" | "stopped") {
-  const fixture = await createFixture()
-  return output(spawnLauncher(fixture, service))
+async function runLauncher(serverUrl: string) {
+  return output(spawnLauncher(serverUrl))
 }
 
-function spawnLauncher(
-  fixture: Awaited<ReturnType<typeof createFixture>>,
-  service: "available" | "malformed" | "stopped",
-  env?: Record<string, string>,
-) {
+function spawnLauncher(serverUrl: string, env?: Record<string, string>) {
   return Bun.spawn([process.execPath, launcher], {
     env: {
       ...process.env,
-      PATH: `${fixture.directory}${delimiter}${process.env.PATH}`,
-      OPENCODE_TEST_SERVICE: service,
+      OPENCODE_DEV_SERVER_URL: serverUrl,
       ...env,
     },
     stdout: "pipe",
@@ -101,48 +106,37 @@ async function output(child: ReturnType<typeof spawnLauncher>) {
   return { stdout, stderr, exitCode }
 }
 
+async function createBackend() {
+  const requests: Array<{ path: string; authorization: string | null }> = []
+  const server = createServer((request, response) => {
+    const authorization = request.headers.authorization ?? null
+    requests.push({ path: request.url ?? "", authorization })
+    if (!authorization) {
+      response.writeHead(401, { "www-authenticate": 'Basic realm="Secure Area"' })
+      response.end("Unauthorized")
+      return
+    }
+    response.setHeader("content-type", "application/json")
+    response.end(JSON.stringify({ healthy: true }))
+  })
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject)
+    server.listen(0, "127.0.0.1", resolve)
+  })
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("Test backend did not bind to a TCP port")
+  return Object.assign(server, { url: new URL(`http://127.0.0.1:${address.port}`), requests })
+}
+
 async function createFixture() {
   const directory = mkdtempSync(join(tmpdir(), "opencode-live-web-"))
   fixtures.push(directory)
   const browser = await writeExecutable(
     directory,
     "browser",
-    `
-const url = new URL(Bun.argv[2])
-const [username, password] = atob(url.searchParams.get("auth_token")).split(":")
-await Bun.write(process.env.OPENCODE_BROWSER_MARKER, JSON.stringify({
-  origin: url.origin,
-  username,
-  passwordMatches: password === "live-web-secret",
-}))
-`,
+    `await Bun.write(process.env.OPENCODE_BROWSER_MARKER, Bun.argv[2])`,
   )
-  await writeExecutable(
-    directory,
-    "opencode2",
-    `
-const command = Bun.argv.slice(2).join(" ")
-if (process.env.OPENCODE_SERVICE_MARKER) {
-  const marker = Bun.file(process.env.OPENCODE_SERVICE_MARKER)
-  await Bun.write(marker, (await marker.exists() ? await marker.text() : "") + command + "\\n")
-}
-if (command === "service status") {
-  if (process.env.OPENCODE_TEST_SERVICE === "stopped") console.log("stopped")
-  else if (process.env.OPENCODE_TEST_SERVICE === "malformed") console.log("not a URL")
-  else console.log("http://127.0.0.1:54321")
-  process.exit(0)
-}
-if (command === "service get password") {
-  console.log("live-web-secret")
-  process.exit(0)
-}
-process.exit(1)
-`,
-  )
-  return {
-    directory,
-    browser,
-  }
+  return { directory, browser }
 }
 
 async function writeExecutable(directory: string, name: string, source: string) {
@@ -168,13 +162,22 @@ async function waitFor(check: () => boolean | Promise<boolean>) {
   throw new Error("Timed out waiting for live web launcher")
 }
 
-function readUrl(url: string) {
-  return new Promise<string>((resolve, reject) => {
-    get(url, (response) => {
-      const chunks: Buffer[] = []
-      response.on("data", (chunk) => chunks.push(chunk))
-      response.on("end", () => resolve(Buffer.concat(chunks).toString()))
-      response.on("error", reject)
-    }).on("error", reject)
-  })
+function requestUrl(url: string, headers?: Record<string, string>) {
+  return new Promise<{ status: number; headers: Record<string, string | string[] | undefined>; body: string }>(
+    (resolve, reject) => {
+      const outgoing = request(url, { headers }, (response) => {
+        const chunks: Buffer[] = []
+        response.on("data", (chunk) => chunks.push(chunk))
+        response.on("end", () =>
+          resolve({
+            status: response.statusCode ?? 0,
+            headers: response.headers,
+            body: Buffer.concat(chunks).toString(),
+          }),
+        )
+      })
+      outgoing.on("error", reject)
+      outgoing.end()
+    },
+  )
 }
