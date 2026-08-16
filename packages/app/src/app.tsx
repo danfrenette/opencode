@@ -264,6 +264,7 @@ export function AppInterface(props: {
   defaultServer: ServerConnection.Key
   canonicalLocalServer?: ServerConnection.Key
   servers?: Array<ServerConnection.Any>
+  activateDefaultServer?: boolean
   router?: Component<BaseRouterProps>
   disableHealthCheck?: boolean
   startup?: Promise<void>
@@ -289,6 +290,7 @@ export function AppInterface(props: {
       defaultServer={props.defaultServer}
       canonicalLocalServer={props.canonicalLocalServer}
       servers={props.servers}
+      activateDefaultServer={props.activateDefaultServer}
     >
       <SettingsProvider>
         <GlobalProvider>

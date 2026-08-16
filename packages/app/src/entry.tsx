@@ -98,6 +98,7 @@ if (!(root instanceof HTMLElement) && import.meta.env.DEV) {
 
 const getCurrentUrl = () => {
   if (location.hostname.includes("opencode.ai")) return "http://localhost:4096"
+  if (import.meta.env.DEV && import.meta.env.VITE_OPENCODE_PROXY === "true") return location.origin
   if (import.meta.env.DEV)
     return `http://${import.meta.env.VITE_OPENCODE_SERVER_HOST ?? "localhost"}:${import.meta.env.VITE_OPENCODE_SERVER_PORT ?? "4096"}`
   return location.origin
@@ -152,6 +153,7 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 if (root instanceof HTMLElement) {
   void loadInitialLocale().then((locale) => {
     const auth = authFromToken(new URLSearchParams(location.search).get("auth_token"))
+    const proxy = import.meta.env.VITE_OPENCODE_PROXY === "true"
     clearAuthToken()
     const server: ServerConnection.Http = {
       type: "http",
@@ -166,9 +168,10 @@ if (root instanceof HTMLElement) {
         <PlatformProvider value={platform}>
           <AppBaseProviders locale={locale}>
             <AppInterface
-              defaultServer={ServerConnection.Key.make(auth ? getCurrentUrl() : getDefaultUrl())}
+              defaultServer={ServerConnection.Key.make(auth || proxy ? getCurrentUrl() : getDefaultUrl())}
               canonicalLocalServer={ServerConnection.key(server)}
               servers={[server]}
+              activateDefaultServer={!!auth || proxy}
               disableHealthCheck
             />
           </AppBaseProviders>

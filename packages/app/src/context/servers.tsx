@@ -280,6 +280,7 @@ export const { use: useServers, provider: ServersProvider } = createSimpleContex
     defaultServer: ServerConnection.Key
     canonicalLocalServer?: ServerConnection.Key
     servers?: Array<ServerConnection.Any>
+    activateDefaultServer?: boolean
   }) => {
     const [store, setStore, _] = persisted(
       {
@@ -300,7 +301,9 @@ export const { use: useServers, provider: ServersProvider } = createSimpleContex
       return resolveServerList({ stored: store.list, props: props.servers })
     })
     const startupServer = props.servers?.find(
-      (server) => server.type === "http" && server.authToken && ServerConnection.key(server) === props.defaultServer,
+      (server) =>
+        ServerConnection.key(server) === props.defaultServer &&
+        (props.activateDefaultServer || (server.type === "http" && server.authToken)),
     )
 
     function add(input: ServerConnection.Http) {

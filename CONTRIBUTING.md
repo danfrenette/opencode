@@ -46,15 +46,19 @@ bun run dev:desktop
 bun run dev:www
 ```
 
-To run the local web interface with hot reload against the already-running installed OpenCode V2 service:
+To run the local web interface with hot reload against an existing OpenCode V2 server on port 4096:
 
 ```bash
 bun run dev:web:live
 ```
 
-This command discovers the installed service and launches only the local Vite server on port 4444. Sessions,
-permissions, and other server-owned state are shared with the installed app. Browser-local tabs, drafts,
-preferences, and storage remain separate for the local Vite origin.
+This command launches only the local Vite server on port 4444 and proxies its API and WebSocket traffic to the
+existing server. Sign in through the browser's HTTP authentication prompt using the credentials printed when the
+server started. Sessions, permissions, projects, terminals, and other server-owned state come from that server.
+Browser-local tabs, drafts, preferences, and storage remain separate for the local Vite origin.
+
+Set `OPENCODE_DEV_SERVER_URL` before running the command when the existing server uses another origin. The command
+never starts, stops, or restarts the backend.
 
 ### Packages
 
