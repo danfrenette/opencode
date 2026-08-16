@@ -166,7 +166,7 @@ if (root instanceof HTMLElement) {
         <PlatformProvider value={platform}>
           <AppBaseProviders locale={locale}>
             <AppInterface
-              defaultServer={ServerConnection.Key.make(getDefaultUrl())}
+              defaultServer={ServerConnection.Key.make(auth ? getCurrentUrl() : getDefaultUrl())}
               canonicalLocalServer={ServerConnection.key(server)}
               servers={[server]}
               disableHealthCheck

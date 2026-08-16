@@ -35,6 +35,8 @@ function discoverService() {
     throw new Error("The installed opencode2 service is unavailable. Start it separately and retry.")
 
   const discovered = discovery.stdout.toString().trim()
+  if (discovered === "stopped")
+    throw new Error("The installed opencode2 service is unavailable. Start it separately and retry.")
   if (!URL.canParse(discovered)) throw new Error("opencode2 service status did not return a valid HTTP URL.")
 
   const server = new URL(discovered)

@@ -13,18 +13,20 @@ afterEach(() => {
 })
 
 describe("dev:web:live", () => {
-  test("fails clearly when the installed service is unavailable", async () => {
-    const result = await runLauncher("unavailable")
+  test("fails clearly when the installed service is stopped", async () => {
+    const result = await runLauncher("stopped")
 
     expect(result.exitCode).not.toBe(0)
-    expect(result.stderr).toContain("installed opencode2 service is unavailable")
+    expect(result.stderr).toContain("error: The installed opencode2 service is unavailable")
+    expect(result.stderr).not.toContain("error: opencode2 service status did not return a valid HTTP URL")
+    expect(result.stdout).toBe("")
   })
 
   test("rejects malformed service discovery output", async () => {
     const result = await runLauncher("malformed")
 
     expect(result.exitCode).not.toBe(0)
-    expect(result.stderr).toContain("did not return a valid HTTP URL")
+    expect(result.stderr).toContain("error: opencode2 service status did not return a valid HTTP URL")
   })
 
   test("fails clearly when port 4444 is occupied", async () => {
@@ -32,7 +34,7 @@ describe("dev:web:live", () => {
     const result = await runLauncher("available")
 
     expect(result.exitCode).not.toBe(0)
-    expect(result.stderr).toContain("Port 4444 is already in use")
+    expect(result.stderr).toContain("error: Port 4444 is already in use")
   })
 
   test("launches Vite with authenticated browser bootstrap and cleans up on exit", async () => {
@@ -68,14 +70,14 @@ describe("dev:web:live", () => {
   }, 15_000)
 })
 
-async function runLauncher(service: "available" | "malformed" | "unavailable") {
+async function runLauncher(service: "available" | "malformed" | "stopped") {
   const fixture = await createFixture()
   return output(spawnLauncher(fixture, service))
 }
 
 function spawnLauncher(
   fixture: Awaited<ReturnType<typeof createFixture>>,
-  service: "available" | "malformed" | "unavailable",
+  service: "available" | "malformed" | "stopped",
   env?: Record<string, string>,
 ) {
   return Bun.spawn([process.execPath, launcher], {
@@ -124,9 +126,10 @@ if (process.env.OPENCODE_SERVICE_MARKER) {
   const marker = Bun.file(process.env.OPENCODE_SERVICE_MARKER)
   await Bun.write(marker, (await marker.exists() ? await marker.text() : "") + command + "\\n")
 }
-if (process.env.OPENCODE_TEST_SERVICE === "unavailable") process.exit(1)
 if (command === "service status") {
-  console.log(process.env.OPENCODE_TEST_SERVICE === "malformed" ? "not a URL" : "http://127.0.0.1:54321")
+  if (process.env.OPENCODE_TEST_SERVICE === "stopped") console.log("stopped")
+  else if (process.env.OPENCODE_TEST_SERVICE === "malformed") console.log("not a URL")
+  else console.log("http://127.0.0.1:54321")
   process.exit(0)
 }
 if (command === "service get password") {

@@ -4,7 +4,7 @@ import { useLocation } from "@solidjs/router"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { useServerSync } from "./server-sync"
-import { ServerConnection, useServers } from "./servers"
+import { ServerConnection, startupServerSelection, useServers } from "./servers"
 import { usePlatform } from "./platform"
 import type { Project } from "@/types"
 import { Persist, persisted, removePersisted } from "@/utils/persist"
@@ -279,6 +279,14 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
       }),
     )
+    const startupServer = startupServerSelection({
+      selection: store.home.selection.server,
+      defaultServer: servers.startup,
+      servers: servers.list.map(ServerConnection.key),
+    })
+    if (startupServer !== store.home.selection.server) {
+      setStore("home", "selection", reconcile({ server: startupServer }))
+    }
     const [ephemeral, setEphemeral] = createStore({
       reviewPanelSource: "other" as ReviewPanelSource,
       sessionTabPreview: {} as Record<string, string | undefined>,

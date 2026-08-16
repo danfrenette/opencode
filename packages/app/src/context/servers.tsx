@@ -264,6 +264,15 @@ export function nextServerAfterRemoval(
   return next ? ServerConnection.key(next) : fallback
 }
 
+export function startupServerSelection(input: {
+  selection: ServerConnection.Key
+  defaultServer?: ServerConnection.Key
+  servers: ServerConnection.Key[]
+}) {
+  if (input.defaultServer && input.servers.includes(input.defaultServer)) return input.defaultServer
+  return input.selection
+}
+
 export const { use: useServers, provider: ServersProvider } = createSimpleContext({
   name: "Server",
   gate: true,
@@ -290,6 +299,9 @@ export const { use: useServers, provider: ServersProvider } = createSimpleContex
     const allServers = createMemo((): Array<ServerConnection.Any> => {
       return resolveServerList({ stored: store.list, props: props.servers })
     })
+    const startupServer = props.servers?.find(
+      (server) => server.type === "http" && server.authToken && ServerConnection.key(server) === props.defaultServer,
+    )
 
     function add(input: ServerConnection.Http) {
       const url_ = normalizeServerUrl(input.http.url)
@@ -328,6 +340,7 @@ export const { use: useServers, provider: ServersProvider } = createSimpleContex
     }
 
     return {
+      startup: startupServer ? props.defaultServer : undefined,
       get list() {
         return allServers()
       },
