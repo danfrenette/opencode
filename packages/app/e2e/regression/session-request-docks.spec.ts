@@ -1,4 +1,15 @@
 import { base64Encode } from "@opencode-ai/core/util/encode"
+import type {
+  FormCancelled,
+  FormCreated,
+  FormInfo,
+  PermissionAsked,
+  PermissionReplied,
+  PermissionRequest,
+  SessionCreated,
+  SessionInfo,
+  SessionStatus,
+} from "@opencode-ai/client/promise"
 import { expect, test, type Page } from "@playwright/test"
 import { mockOpenCodeServer } from "../utils/mock-server"
 import { installSseTransport } from "../utils/sse-transport"
@@ -8,6 +19,29 @@ const directory = "C:/OpenCode/RequestDocks"
 const projectID = "proj_request_docks"
 const sessionID = "ses_request_docks"
 const title = "Request dock regression"
+
+type RequestDockEvent = {
+  directory: string
+  payload:
+    | { type: SessionCreated["type"]; properties: SessionCreated["data"] }
+    | { type: PermissionAsked["type"]; properties: PermissionAsked["data"] }
+    | { type: PermissionReplied["type"]; properties: PermissionReplied["data"] }
+    | { type: FormCreated["type"]; properties: FormCreated["data"] }
+    | { type: FormCancelled["type"]; properties: FormCancelled["data"] }
+}
+
+type SessionFixture = Pick<SessionInfo, "id" | "parentID" | "projectID" | "title" | "time"> & {
+  slug: string
+  directory: string
+  version: string
+}
+
+type RequestDockFixtures = {
+  permissions?: PermissionRequest[] | (() => PermissionRequest[])
+  forms?: FormInfo[] | (() => FormInfo[])
+  sessionStatus?: Record<string, SessionStatus>
+  sessions?: SessionFixture[]
+}
 
 test("shows a pending question dock", async ({ page }) => {
   await mockServer(page, {
@@ -78,7 +112,7 @@ test("shows a pending question dock", async ({ page }) => {
 })
 
 test("confirms persistent permission and waits for authoritative removal", async ({ page }) => {
-  const transport = await installSseTransport(page, {
+  const transport = await installSseTransport<RequestDockEvent>(page, {
     server: `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`,
     retry: 20,
   })
@@ -103,9 +137,11 @@ test("confirms persistent permission and waits for authoritative removal", async
     ],
   })
   const replyGate = Promise.withResolvers<void>()
+  const replyIntercepted = Promise.withResolvers<void>()
   let replyRequests = 0
   await page.route(`**/api/session/${sessionID}/permission/permission-always/reply`, async (route) => {
     replyRequests += 1
+    replyIntercepted.resolve()
     await replyGate.promise
     await route.fulfill({ status: 204 })
   })
@@ -127,6 +163,9 @@ test("confirms persistent permission and waits for authoritative removal", async
   await expect(permission.getByText("git *", { exact: true })).toBeVisible()
   await expect(permission.getByText("jj *", { exact: true })).toBeVisible()
   await expect(permission.getByText("This will allow the following patterns until OpenCode is restarted.")).toBeVisible()
+  await permission.getByRole("button", { name: "Cancel" }).click()
+  await expect(permission.getByRole("button", { name: "Allow always" })).toBeFocused()
+  await permission.getByRole("button", { name: "Allow always" }).click()
 
   const reply = page.waitForRequest(
     (request) =>
@@ -138,6 +177,7 @@ test("confirms persistent permission and waits for authoritative removal", async
   )
   await permission.getByRole("button", { name: "Confirm" }).click()
   const request = await reply
+  await replyIntercepted.promise
   expect(new URL(request.url()).pathname).toBe(`/api/session/${sessionID}/permission/permission-always/reply`)
   expect(request.postDataJSON()).toEqual({ reply: "always" })
   expect(replyRequests).toBe(1)
@@ -160,6 +200,7 @@ test("confirms persistent permission and waits for authoritative removal", async
   await expect(permission.getByRole("button", { name: "Deny" })).toBeEnabled()
   await expect(permission.getByRole("button", { name: "Allow always" })).toHaveCount(0)
   await expect(permission.getByText("Always allow")).toHaveCount(0)
+  await expect(permission.getByRole("button", { name: "Allow once" })).toBeFocused()
 
   const onceReply = page.waitForRequest(
     (request) =>
@@ -176,7 +217,7 @@ test("confirms persistent permission and waits for authoritative removal", async
 
 test("denies a child permission with corrective feedback without leaving the parent", async ({ page }) => {
   const childID = "ses_permission_child"
-  const transport = await installSseTransport(page, {
+  const transport = await installSseTransport<RequestDockEvent>(page, {
     server: `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`,
     retry: 20,
   })
@@ -193,16 +234,8 @@ test("denies a child permission with corrective feedback without leaving the par
         time: { created: 1700000001000, updated: 1700000001000 },
       },
     ],
-    permissions: [
-      {
-        id: "permission-child-reject",
-        sessionID: childID,
-        action: "webfetch",
-        resources: ["https://example.com"],
-        metadata: {},
-      },
-    ],
-    sessionStatus: { [childID]: { type: "running" } },
+    permissions: [],
+    sessionStatus: { [childID]: { type: "busy" } },
   })
 
   await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
@@ -246,6 +279,9 @@ test("denies a child permission with corrective feedback without leaving the par
   await expect(permission.getByText("Requested by Research subagent")).toBeVisible()
   const feedback = permission.getByRole("textbox", { name: "Corrective feedback" })
   await expect(feedback).toBeFocused()
+  await permission.getByRole("button", { name: "Cancel" }).click()
+  await expect(permission.getByRole("button", { name: "Deny" })).toBeFocused()
+  await permission.getByRole("button", { name: "Deny" }).click()
   await feedback.fill("Use the internal documentation instead")
   const reply = page.waitForRequest(
     (request) =>
@@ -306,7 +342,7 @@ test("allows empty rejection feedback and preserves feedback after a failed repl
 })
 
 test("restores the draft caret before typing after a request dock closes", async ({ page }) => {
-  const transport = await installSseTransport(page, {
+  const transport = await installSseTransport<RequestDockEvent>(page, {
     server: `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`,
     retry: 20,
   })
@@ -377,13 +413,7 @@ test("restores the draft caret before typing after a request dock closes", async
 
 async function mockServer(
   page: Page,
-  requests: {
-    permissions?: unknown[] | (() => unknown[])
-    questions?: unknown[] | (() => unknown[])
-    forms?: unknown[] | (() => unknown[])
-    sessionStatus?: Record<string, unknown>
-    sessions?: ({ id: string } & Record<string, unknown>)[]
-  },
+  fixtures: RequestDockFixtures,
 ) {
   await mockOpenCodeServer(page, {
     protocol: "v2",
@@ -423,13 +453,12 @@ async function mockServer(
         version: "dev",
         time: { created: 1700000000000, updated: 1700000000000 },
       },
-      ...(requests.sessions ?? []),
+      ...(fixtures.sessions ?? []),
     ],
     pageMessages: () => ({ items: [] }),
-    permissions: requests.permissions,
-    questions: requests.questions,
-    forms: requests.forms,
-    sessionStatus: requests.sessionStatus,
+    permissions: fixtures.permissions,
+    forms: fixtures.forms,
+    sessionStatus: fixtures.sessionStatus,
   })
   await page.addInitScript(() => {
     localStorage.setItem("settings.v3", JSON.stringify({ general: { newLayoutDesigns: true } }))

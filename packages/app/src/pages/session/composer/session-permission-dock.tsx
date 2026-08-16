@@ -1,4 +1,4 @@
-import { createEffect, For, Match, Show, Switch } from "solid-js"
+import { createEffect, For, Match, onMount, Show, Switch } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { PermissionRequest } from "@opencode-ai/client/promise"
 import { Button } from "@opencode-ai/ui/button"
@@ -6,24 +6,48 @@ import { TextareaV2 } from "@opencode-ai/ui/v2/textarea-v2"
 import { DockPrompt } from "@opencode-ai/session-ui/dock-prompt"
 import { Icon } from "@opencode-ai/ui/icon"
 import { useLanguage } from "@/context/language"
+import type { PermissionDecision } from "./session-permission-decision"
+
+type PermissionStage = "permission" | "always" | "reject"
+type PermissionFocusTarget = "once" | "always" | "reject" | "confirm" | "feedback"
+type PermissionDockState = {
+  requestID: string
+  stage: PermissionStage
+  message: string
+}
+
+const initialState = (requestID: string) =>
+  ({
+    requestID,
+    stage: "permission",
+    message: "",
+  }) satisfies PermissionDockState
 
 export function SessionPermissionDock(props: {
   request: PermissionRequest
   source?: string
   responding: boolean
-  onDecide: (response: "once" | "always" | "reject", message?: string) => void
+  onDecide: (decision: PermissionDecision) => void
 }) {
   const language = useLanguage()
-  const [store, setStore] = createStore({
-    requestID: props.request.id,
-    stage: "permission" as "permission" | "always" | "reject",
-    message: "",
-  })
+  const actions: Partial<Record<PermissionFocusTarget, HTMLElement>> = {}
+  const [store, setStore] = createStore<PermissionDockState>(initialState(props.request.id))
 
   createEffect(() => {
     if (store.requestID === props.request.id) return
-    setStore({ requestID: props.request.id, stage: "permission", message: "" })
+    setStore(initialState(props.request.id))
   })
+
+  const focus = (target: PermissionFocusTarget) => queueMicrotask(() => actions[target]?.focus())
+  onMount(() => focus("once"))
+  const enter = (stage: Exclude<PermissionStage, "permission">, target: PermissionFocusTarget) => {
+    setStore("stage", stage)
+    focus(target)
+  }
+  const cancel = (stage: Exclude<PermissionStage, "permission">) => {
+    setStore("stage", "permission")
+    focus(stage)
+  }
 
   const toolDescription = () => {
     const key = `settings.permissions.tool.${props.request.action}.description`
@@ -56,27 +80,36 @@ export function SessionPermissionDock(props: {
             <Switch>
               <Match when={store.stage === "permission"}>
                 <Button
+                  ref={(element: HTMLButtonElement) => {
+                    actions.reject = element
+                  }}
                   variant="ghost"
                   size="normal"
-                  onClick={() => setStore("stage", "reject")}
+                  onClick={() => enter("reject", "feedback")}
                   disabled={props.responding}
                 >
                   {language.t("ui.permission.deny")}
                 </Button>
                 <Show when={props.request.save?.length}>
                   <Button
+                    ref={(element: HTMLButtonElement) => {
+                      actions.always = element
+                    }}
                     variant="secondary"
                     size="normal"
-                    onClick={() => setStore("stage", "always")}
+                    onClick={() => enter("always", "confirm")}
                     disabled={props.responding}
                   >
                     {language.t("ui.permission.allowAlways")}
                   </Button>
                 </Show>
                 <Button
+                  ref={(element: HTMLButtonElement) => {
+                    actions.once = element
+                  }}
                   variant="primary"
                   size="normal"
-                  onClick={() => props.onDecide("once")}
+                  onClick={() => props.onDecide({ reply: "once" })}
                   disabled={props.responding}
                 >
                   {language.t("ui.permission.allowOnce")}
@@ -86,16 +119,18 @@ export function SessionPermissionDock(props: {
                 <Button
                   variant="ghost"
                   size="normal"
-                  onClick={() => setStore("stage", "permission")}
+                  onClick={() => cancel("always")}
                   disabled={props.responding}
                 >
                   {language.t("ui.common.cancel")}
                 </Button>
                 <Button
+                  ref={(element: HTMLButtonElement) => {
+                    actions.confirm = element
+                  }}
                   variant="primary"
                   size="normal"
-                  autofocus
-                  onClick={() => props.onDecide("always")}
+                  onClick={() => props.onDecide({ reply: "always" })}
                   disabled={props.responding}
                 >
                   {language.t("ui.common.confirm")}
@@ -105,7 +140,7 @@ export function SessionPermissionDock(props: {
                 <Button
                   variant="ghost"
                   size="normal"
-                  onClick={() => setStore("stage", "permission")}
+                  onClick={() => cancel("reject")}
                   disabled={props.responding}
                 >
                   {language.t("ui.common.cancel")}
@@ -113,7 +148,7 @@ export function SessionPermissionDock(props: {
                 <Button
                   variant="primary"
                   size="normal"
-                  onClick={() => props.onDecide("reject", store.message || undefined)}
+                  onClick={() => props.onDecide({ reply: "reject", message: store.message || undefined })}
                   disabled={props.responding}
                 >
                   {language.t("session.permission.reject.submit")}
@@ -156,8 +191,10 @@ export function SessionPermissionDock(props: {
                 {language.t("session.permission.reject.feedback")}
               </label>
               <TextareaV2
+                ref={(element: HTMLTextAreaElement) => {
+                  actions.feedback = element
+                }}
                 id={`permission-feedback-${props.request.id}`}
-                autofocus
                 rows={3}
                 value={store.message}
                 disabled={props.responding}

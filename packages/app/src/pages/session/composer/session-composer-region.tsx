@@ -54,9 +54,9 @@ export function SessionComposerRegion(props: {
                 request={request}
                 source={controller.state.permissionSource()}
                 responding={controller.state.permissionResponding()}
-                onDecide={(response, message) => {
+                onDecide={(decision) => {
                   controller.onResponseSubmit()
-                  controller.state.decide(response, message)
+                  controller.state.decide(decision)
                 }}
               />
             </div>

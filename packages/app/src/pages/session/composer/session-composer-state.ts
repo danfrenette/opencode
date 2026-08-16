@@ -12,6 +12,7 @@ import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { sessionPermissionRequest, sessionQuestionForm } from "./session-request-tree"
 import { createQuery, useQueryClient } from "@tanstack/solid-query"
+import type { PermissionDecision } from "./session-permission-decision"
 
 export const todoState = (input: {
   count: number
@@ -219,13 +220,7 @@ export function createSessionComposerController(options?: { closeMs?: number | (
     return sync().data.session.find((item) => item.id === perm.sessionID)?.title ?? perm.sessionID
   })
 
-  createEffect(() => {
-    const id = permissionRequest()?.id
-    if (!store.responding || store.responding === id) return
-    setStore("responding", undefined)
-  })
-
-  const decide = (response: "once" | "always" | "reject", message?: string) => {
+  const decide = (decision: PermissionDecision) => {
     const perm = permissionRequest()
     if (!perm) return
     if (store.responding === perm.id) return
@@ -235,8 +230,8 @@ export function createSessionComposerController(options?: { closeMs?: number | (
       .api.permission.reply({
         sessionID: perm.sessionID,
         requestID: perm.id,
-        reply: response,
-        ...(message ? { message } : {}),
+        reply: decision.reply,
+        ...(decision.reply === "reject" && decision.message ? { message: decision.message } : {}),
       })
       .catch((err: unknown) => {
         setStore("responding", (id) => (id === perm.id ? undefined : id))
