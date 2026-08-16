@@ -25,6 +25,7 @@
     "test:browser": "bun test --conditions=browser --preload ./happydom.ts ./test-browser",
     "test:unit:watch": "bun test --conditions=solid --watch --preload ./happydom.ts ./src",
     "test:e2e": "playwright test",
+    "test:e2e:proxy": "playwright test --config playwright.proxy.config.ts",
     "test:e2e:local": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report e2e/playwright-report",

@@ -18,17 +18,21 @@ const sentry =
         },
       })
     : false
+const devServerUrl = process.env.OPENCODE_DEV_SERVER_URL
 
 export default defineConfig({
   plugins: [desktopPlugin, sentry] as any,
+  define: {
+    "import.meta.env.VITE_OPENCODE_PROXY": JSON.stringify(!!devServerUrl),
+  },
   server: {
     host: "0.0.0.0",
     allowedHosts: true,
     port: 3000,
-    proxy: process.env.OPENCODE_DEV_SERVER_URL
+    proxy: devServerUrl
       ? {
           "/api": {
-            target: process.env.OPENCODE_DEV_SERVER_URL,
+            target: devServerUrl,
             changeOrigin: true,
             ws: true,
           },

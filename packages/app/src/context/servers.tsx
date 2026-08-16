@@ -280,7 +280,7 @@ export const { use: useServers, provider: ServersProvider } = createSimpleContex
     defaultServer: ServerConnection.Key
     canonicalLocalServer?: ServerConnection.Key
     servers?: Array<ServerConnection.Any>
-    activateDefaultServer?: boolean
+    startupServer?: ServerConnection.Key
   }) => {
     const [store, setStore, _] = persisted(
       {
@@ -300,11 +300,7 @@ export const { use: useServers, provider: ServersProvider } = createSimpleContex
     const allServers = createMemo((): Array<ServerConnection.Any> => {
       return resolveServerList({ stored: store.list, props: props.servers })
     })
-    const startupServer = props.servers?.find(
-      (server) =>
-        ServerConnection.key(server) === props.defaultServer &&
-        (props.activateDefaultServer || (server.type === "http" && server.authToken)),
-    )
+    const startupServer = props.servers?.find((server) => ServerConnection.key(server) === props.startupServer)
 
     function add(input: ServerConnection.Http) {
       const url_ = normalizeServerUrl(input.http.url)
@@ -343,7 +339,7 @@ export const { use: useServers, provider: ServersProvider } = createSimpleContex
     }
 
     return {
-      startup: startupServer ? props.defaultServer : undefined,
+      startup: startupServer ? props.startupServer : undefined,
       get list() {
         return allServers()
       },

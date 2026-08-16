@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { chmodSync, mkdtempSync, rmSync } from "fs"
-import { createServer, request } from "http"
+import { request } from "http"
 import { tmpdir } from "os"
 import { join } from "path"
 
@@ -62,7 +62,12 @@ describe("dev:web:live", () => {
       const authenticated = await requestUrl(`${localUrl}/api/health`, { authorization })
       expect(authenticated.status).toBe(200)
       expect(JSON.parse(authenticated.body)).toEqual({ healthy: true })
-      expect(backend.requests.at(-1)).toEqual({ path: "/api/health", authorization })
+
+      const event = await readFirstChunk(`${localUrl}/api/event`, { authorization })
+      expect(event.headers["content-type"]).toBe("text/event-stream")
+      expect(event.body).toBe('data: {"type":"server.connected"}\n\n')
+
+      expect(await readWebSocket("ws://127.0.0.1:4444/api/socket")).toBe("connected")
     } catch (error) {
       failure = error
     } finally {
@@ -107,25 +112,75 @@ async function output(child: ReturnType<typeof spawnLauncher>) {
 }
 
 async function createBackend() {
-  const requests: Array<{ path: string; authorization: string | null }> = []
-  const server = createServer((request, response) => {
-    const authorization = request.headers.authorization ?? null
-    requests.push({ path: request.url ?? "", authorization })
-    if (!authorization) {
-      response.writeHead(401, { "www-authenticate": 'Basic realm="Secure Area"' })
-      response.end("Unauthorized")
-      return
+  const directory = mkdtempSync(join(tmpdir(), "opencode-live-web-backend-"))
+  fixtures.push(directory)
+  const executable = await writeExecutable(
+    directory,
+    "backend",
+    `
+const authorization = "Basic " + btoa("opencode:live-web-secret")
+const server = Bun.serve({
+  hostname: "127.0.0.1",
+  port: Number(process.env.OPENCODE_BACKEND_PORT),
+  fetch(request, server) {
+    const url = new URL(request.url)
+    if (request.headers.get("authorization") !== authorization) {
+      return new Response("Unauthorized", {
+        status: 401,
+        headers: { "www-authenticate": 'Basic realm="Secure Area"' },
+      })
     }
-    response.setHeader("content-type", "application/json")
-    response.end(JSON.stringify({ healthy: true }))
+    if (url.pathname === "/api/socket") {
+      if (server.upgrade(request)) return
+      return new Response("WebSocket upgrade required", { status: 426 })
+    }
+    if (url.pathname === "/api/event") {
+      return new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('data: {"type":"server.connected"}\\n\\n'))
+        },
+      }), { headers: { "content-type": "text/event-stream" } })
+    }
+    return Response.json({ healthy: true })
+  },
+  websocket: {
+    open(socket) {
+      socket.send("connected")
+    },
+    message() {},
+  },
+})
+const stop = () => {
+  server.stop(true)
+  process.exit()
+}
+process.on("SIGINT", stop)
+process.on("SIGTERM", stop)
+await new Promise(() => {})
+`,
+  )
+  using reservation = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() })
+  const port = reservation.port
+  reservation.stop(true)
+  const child = Bun.spawn([executable], {
+    env: { ...process.env, OPENCODE_BACKEND_PORT: String(port) },
+    stdout: "ignore",
+    stderr: "inherit",
   })
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject)
-    server.listen(0, "127.0.0.1", resolve)
-  })
-  const address = server.address()
-  if (!address || typeof address === "string") throw new Error("Test backend did not bind to a TCP port")
-  return Object.assign(server, { url: new URL(`http://127.0.0.1:${address.port}`), requests })
+  const url = new URL(`http://127.0.0.1:${port}`)
+  await waitFor(() =>
+    requestUrl(new URL("/api/health", url).href).then(
+      (response) => response.status === 401,
+      () => false,
+    ),
+  )
+  return {
+    url,
+    async [Symbol.asyncDispose]() {
+      child.kill("SIGTERM")
+      await child.exited
+    },
+  }
 }
 
 async function createFixture() {
@@ -180,4 +235,71 @@ function requestUrl(url: string, headers?: Record<string, string>) {
       outgoing.end()
     },
   )
+}
+
+function readFirstChunk(url: string, headers: Record<string, string>) {
+  return new Promise<{ headers: Record<string, string | string[] | undefined>; body: string }>((resolve, reject) => {
+    const outgoing = request(url, { headers }, (response) => {
+      response.once("data", (chunk) => {
+        resolve({ headers: response.headers, body: Buffer.from(chunk).toString() })
+        response.destroy()
+      })
+      response.on("error", reject)
+    })
+    outgoing.on("error", reject)
+    outgoing.end()
+  })
+}
+
+async function readWebSocket(url: string) {
+  const source = `
+const { randomBytes } = require("node:crypto")
+const { request } = require("node:http")
+const target = new URL(process.argv[1])
+target.protocol = "http:"
+const outgoing = request(target, {
+  headers: {
+    Authorization: "Basic " + Buffer.from("opencode:live-web-secret").toString("base64"),
+    Connection: "Upgrade",
+    Upgrade: "websocket",
+    "Sec-WebSocket-Key": randomBytes(16).toString("base64"),
+    "Sec-WebSocket-Version": "13",
+  },
+})
+const timeout = setTimeout(() => outgoing.destroy(new Error("WebSocket proxy connection timed out")), 5000)
+outgoing.on("upgrade", (response, socket, head) => {
+  if (response.statusCode !== 101) throw new Error("WebSocket proxy returned " + response.statusCode)
+  let received = head
+  const complete = () => {
+    if (!received.toString().includes("connected")) return
+    clearTimeout(timeout)
+    process.stdout.write("connected")
+    socket.destroy()
+  }
+  complete()
+  socket.on("data", (chunk) => {
+    received = Buffer.concat([received, chunk])
+    complete()
+  })
+})
+outgoing.on("response", (response) => {
+  clearTimeout(timeout)
+  console.error("WebSocket proxy returned " + response.statusCode)
+  process.exitCode = 1
+})
+outgoing.on("error", (error) => {
+  clearTimeout(timeout)
+  console.error(error.message)
+  process.exitCode = 1
+})
+outgoing.end()
+`
+  const child = Bun.spawn(["node", "-e", source, url], { stdout: "pipe", stderr: "pipe" })
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ])
+  if (exitCode !== 0) throw new Error(stderr.trim() || "WebSocket proxy connection failed")
+  return stdout
 }
