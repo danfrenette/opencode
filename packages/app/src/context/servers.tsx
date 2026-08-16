@@ -154,30 +154,29 @@ export function resolveServerList(input: {
   )
 
   for (const value of input.stored) {
-    const conn: ServerConnection.Http =
-      typeof value === "string"
-        ? {
-            type: "http" as const,
-            http: { url: value },
-          }
-        : "http" in value
-          ? value
-          : { type: "http", http: value }
+    const conn = storedServer(value)
     const key = ServerConnection.key(conn)
-
     const existing = deduped.get(key)
-    if (existing) {
-      const preferProvidedAuth = existing.type === "http" && existing.authToken
-      deduped.set(key, {
-        ...existing,
-        ...conn,
-        authToken: preferProvidedAuth ? true : conn.authToken,
-        http: preferProvidedAuth ? { ...conn.http, ...existing.http } : { ...existing.http, ...conn.http },
-      })
-    } else deduped.set(key, conn)
+    if (!existing) {
+      deduped.set(key, conn)
+      continue
+    }
+    deduped.set(key, mergeStoredServer(existing, conn))
   }
 
   return [...deduped.values()]
+}
+
+function storedServer(value: StoredServer): ServerConnection.Http {
+  if (typeof value === "string") return { type: "http", http: { url: value } }
+  if ("http" in value) return value
+  return { type: "http", http: value }
+}
+
+function mergeStoredServer(provided: ServerConnection.Any, stored: ServerConnection.Http): ServerConnection.Any {
+  const merged = { ...provided, ...stored, http: { ...provided.http, ...stored.http } }
+  if (provided.type !== "http" || !provided.authToken) return merged
+  return { ...merged, authToken: true, http: { ...stored.http, ...provided.http } }
 }
 
 export function canRemoveServer(input: {
