@@ -33,22 +33,21 @@ const assertions: Permission.AssertInput[] = []
 const writes: string[] = []
 let formatFile = (_target: string): Effect.Effect<boolean> => Effect.succeed(false)
 let denyAction: string | undefined
+let correction: { action: string; feedback: string } | undefined
 
 const permission = permissionLayer({
   assert: (input) =>
-    Effect.sync(() => assertions.push(input)).pipe(
-      Effect.andThen(
-        input.action === denyAction
-          ? Effect.fail(
-              new Permission.BlockedError({
-                rules: [],
-                permission: input.action,
-                resources: input.resources,
-              }),
-            )
-          : Effect.void,
-      ),
-    ),
+    Effect.gen(function* () {
+      assertions.push(input)
+      if (input.action === denyAction)
+        return yield* new Permission.BlockedError({
+          rules: [],
+          permission: input.action,
+          resources: input.resources,
+        })
+      if (input.action === correction?.action)
+        return yield* new Permission.CorrectedError({ feedback: correction.feedback })
+    }),
 })
 
 const formatter = Layer.mock(Formatter.Service, {
@@ -60,6 +59,7 @@ const reset = () => {
   writes.length = 0
   formatFile = () => Effect.succeed(false)
   denyAction = undefined
+  correction = undefined
 }
 
 const withTool = <A, E, R>(directory: string, body: (registry: Tool.Interface) => Effect.Effect<A, E, R>) => {
@@ -403,6 +403,28 @@ describe("WriteTool", () => {
         Effect.promise(() =>
           Promise.all([active[Symbol.asyncDispose](), outside[Symbol.asyncDispose]()]).then(() => undefined),
         ),
+    ),
+  )
+
+  it.live("returns corrective edit feedback without writing", () =>
+    Effect.acquireUseRelease(
+      Effect.promise(() => tmpdir()),
+      (tmp) => {
+        reset()
+        correction = { action: "edit", feedback: "Use the read tool instead" }
+        return withTool(tmp.path, (registry) =>
+          Effect.gen(function* () {
+            expect(
+              yield* executeTool(registry, call({ path: "test_harness.md", content: "blocked" })),
+            ).toEqual({
+              status: "error",
+              error: { type: "tool.execution", message: "Use the read tool instead" },
+            })
+            expect(writes).toEqual([])
+          }),
+        )
+      },
+      (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
     ),
   )
 })
