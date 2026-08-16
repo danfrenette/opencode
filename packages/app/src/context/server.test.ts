@@ -5,6 +5,7 @@ import {
   nextServerAfterRemoval,
   resolveServerList,
   ServerConnection,
+  startupServerSelection,
 } from "./servers"
 import { ServerScope } from "@/utils/server-scope"
 
@@ -57,6 +58,31 @@ describe("resolveServerList", () => {
     })
     expect(list[0]?.type === "http" ? list[0].authToken : true).toBeUndefined()
   })
+})
+
+test("startup default overrides a persisted still-valid alternate server", () => {
+  const installed = ServerConnection.Key.make("http://127.0.0.1:54321")
+  const alternate = ServerConnection.Key.make("http://127.0.0.1:4096")
+
+  expect(
+    startupServerSelection({
+      selection: alternate,
+      defaultServer: installed,
+      servers: [alternate, installed],
+    }),
+  ).toBe(installed)
+})
+
+test("ordinary startup preserves the persisted server selection", () => {
+  const alternate = ServerConnection.Key.make("http://127.0.0.1:4096")
+
+  expect(
+    startupServerSelection({
+      selection: alternate,
+      defaultServer: undefined,
+      servers: [alternate],
+    }),
+  ).toBe(alternate)
 })
 
 test("treats WSL sidecars as remote server connections", () => {
