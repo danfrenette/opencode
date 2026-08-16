@@ -79,6 +79,19 @@ describe("toSessionError", () => {
     })
   })
 
+  test("projects permission corrections through tool wrappers", () => {
+    const corrected = new Permission.CorrectedError({ feedback: "Use another tool" })
+
+    expect(toSessionError(new ToolFailure({ message: "Unable to edit src/index.ts", error: corrected }))).toEqual({
+      type: "tool.execution",
+      message: "Use another tool",
+    })
+    expect(toSessionError(new Tool.Error({ message: "Unable to execute command: rm file", error: corrected }))).toEqual({
+      type: "tool.execution",
+      message: "Use another tool",
+    })
+  })
+
   test("preserves provider HTTP status", () => {
     const http = new HttpContext({
       request: new HttpRequestDetails({ method: "POST", url: "https://example.com", headers: {} }),
