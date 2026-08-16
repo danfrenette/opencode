@@ -2,6 +2,8 @@ import type { Page, Route } from "@playwright/test"
 import type { JsonValue, OpenCodeEvent, SessionMessageInfo } from "@opencode-ai/client/promise"
 
 export interface MockServerConfig {
+  protocol?: "v1" | "v2"
+  additionalServerPorts?: string[]
   provider: unknown | (() => unknown)
   integrationMethods?: Record<string, unknown[]>
   onConnectKey?: (input: { integrationID: string; body: unknown }) => void
@@ -39,11 +41,20 @@ type MockStreamWindow = Window & {
 
 export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
   const cursors = new Map<string, string>()
-  const server = `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`
   let nextCursor = 0
+  const targetPort = process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"
+  const appPort = new URL(
+    process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "3000"}`,
+  ).port
+  const serverPorts = new Set([targetPort, ...(config.additionalServerPorts ?? [])])
+  const routePorts = new Set([...serverPorts, appPort])
+  const streamPorts = [
+    process.env.OPENCODE_DEV_SERVER_URL ? appPort : targetPort,
+    ...(config.additionalServerPorts ?? []),
+  ]
 
   await page.addInitScript(
-    ({ server, retry }) => {
+    ({ ports, retry }) => {
       const host = window as MockStreamWindow
       if (host.__testSseTransport || host.__mockServerStream) return
       const originalFetch = window.fetch.bind(window)
@@ -68,7 +79,7 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
       const fetch = (input: RequestInfo | URL, init?: RequestInit) => {
         const request = new Request(input, init)
         const url = new URL(request.url)
-        if (url.origin !== server || url.pathname !== "/api/event") return originalFetch(request)
+        if (!ports.includes(url.port) || url.pathname !== "/api/event") return originalFetch(request)
         state.connections += 1
         const id = state.connections
         let ended = false
@@ -108,7 +119,7 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
       }
       Object.defineProperty(window, "fetch", { configurable: true, writable: true, value: fetch })
     },
-    { server, retry: config.eventRetry },
+    { ports: streamPorts, retry: config.eventRetry },
   )
 
   if (config.events) {
@@ -129,11 +140,7 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
   }
   await page.route("**/*", async (route) => {
     const url = new URL(route.request().url())
-    const targetPort = process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"
-    const appPort = new URL(
-      process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "3000"}`,
-    ).port
-    if (url.origin !== server && url.port !== appPort) return route.fallback()
+    if (!routePorts.has(url.port)) return route.fallback()
 
     const path = url.pathname
     if (path === "/api/event") {
@@ -424,7 +431,7 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
       })
     }
 
-    if (url.port === targetPort && targetPort !== appPort)
+    if (serverPorts.has(url.port) && url.port !== appPort)
       return json(route, { error: `Unhandled mock route: ${path}` }, undefined, 404)
     return route.fallback()
   })

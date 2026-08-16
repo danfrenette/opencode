@@ -63,7 +63,6 @@ function startVite(server: URL) {
     env: {
       ...process.env,
       OPENCODE_DEV_SERVER_URL: server.origin,
-      VITE_OPENCODE_PROXY: "true",
       VITE_OPENCODE_SERVER_HOST: "localhost",
       VITE_OPENCODE_SERVER_PORT: "4444",
     },

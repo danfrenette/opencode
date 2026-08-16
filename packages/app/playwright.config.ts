@@ -4,8 +4,9 @@ const port = Number(process.env.PLAYWRIGHT_PORT ?? 3000)
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${port}`
 const serverHost = process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"
 const serverPort = process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"
+const proxyServerUrl = process.env.OPENCODE_DEV_SERVER_URL
 const command = `bun run dev -- --host 0.0.0.0 --port ${port}`
-const reuse = !process.env.CI
+const reuse = process.env.PLAYWRIGHT_REUSE_SERVER ? process.env.PLAYWRIGHT_REUSE_SERVER === "true" : !process.env.CI
 const workers = Number(process.env.PLAYWRIGHT_WORKERS ?? (process.env.CI ? 5 : 0)) || undefined
 export default defineConfig({
   testDir: "./e2e",
@@ -28,6 +29,7 @@ export default defineConfig({
     env: {
       VITE_OPENCODE_SERVER_HOST: serverHost,
       VITE_OPENCODE_SERVER_PORT: serverPort,
+      ...(proxyServerUrl ? { OPENCODE_DEV_SERVER_URL: proxyServerUrl } : {}),
     },
   },
   use: {
