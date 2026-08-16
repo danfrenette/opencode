@@ -4,8 +4,12 @@ import type { PermissionRequest } from "@opencode-ai/client/promise"
 import { Button } from "@opencode-ai/ui/button"
 import { TextareaV2 } from "@opencode-ai/ui/v2/textarea-v2"
 import { DockPrompt } from "@opencode-ai/session-ui/dock-prompt"
+import { File } from "@opencode-ai/session-ui/file"
+import { resolveFileDiff } from "@opencode-ai/session-ui/session-diff"
 import { Icon } from "@opencode-ai/ui/icon"
+import { Select } from "@opencode-ai/ui/select"
 import { useLanguage } from "@/context/language"
+import { canonicalDiffs } from "@/utils/diffs"
 import type { PermissionDecision } from "./session-permission-decision"
 
 type PermissionStage = "permission" | "always" | "reject"
@@ -14,13 +18,20 @@ type PermissionDockState = {
   requestID: string
   stage: PermissionStage
   message: string
+  file?: string
 }
 
-const initialState = (requestID: string) =>
+const requestFiles = (request: PermissionRequest) => {
+  if (request.action !== "edit") return undefined
+  return canonicalDiffs(request.metadata?.files)
+}
+
+const initialState = (request: PermissionRequest) =>
   ({
-    requestID,
+    requestID: request.id,
     stage: "permission",
     message: "",
+    file: requestFiles(request)?.[0]?.file,
   }) satisfies PermissionDockState
 
 export function SessionPermissionDock(props: {
@@ -31,11 +42,19 @@ export function SessionPermissionDock(props: {
 }) {
   const language = useLanguage()
   const actions: Partial<Record<PermissionFocusTarget, HTMLElement>> = {}
-  const [store, setStore] = createStore<PermissionDockState>(initialState(props.request.id))
+  const [store, setStore] = createStore<PermissionDockState>(initialState(props.request))
+  const files = () => requestFiles(props.request)
+  const preview = () => files()?.find((diff) => diff.file === store.file) ?? files()?.[0]
+  const fileLabel = (diff: NonNullable<ReturnType<typeof files>>[number]) =>
+    language.t(`session.permission.preview.file.${diff.status}`, {
+      file: diff.file,
+      additions: diff.additions,
+      deletions: diff.deletions,
+    })
 
   createEffect(() => {
     if (store.requestID === props.request.id) return
-    setStore(initialState(props.request.id))
+    setStore(initialState(props.request))
   })
 
   const focus = (target: PermissionFocusTarget) => queueMicrotask(() => actions[target]?.focus())
@@ -166,6 +185,44 @@ export function SessionPermissionDock(props: {
             <div data-slot="permission-hint">{language.t("session.permission.source", { name: source() })}</div>
           </div>
         )}
+      </Show>
+      <Show when={props.request.action === "edit"}>
+        <Show
+          when={preview()}
+          fallback={
+            <div data-slot="permission-row">
+              <span data-slot="permission-spacer" aria-hidden="true" />
+              <div data-slot="permission-preview-warning">{language.t("session.permission.preview.unavailable")}</div>
+            </div>
+          }
+        >
+          {(diff) => (
+            <div data-slot="permission-preview">
+              <Show when={(files()?.length ?? 0) > 1}>
+                <div data-slot="permission-preview-selector">
+                  <Select
+                    options={files() ?? []}
+                    current={diff()}
+                    value={(item) => item.file}
+                    label={fileLabel}
+                    onSelect={(item) => item && setStore("file", item.file)}
+                    size="small"
+                    variant="secondary"
+                    triggerProps={{ "aria-label": language.t("session.permission.preview.fileSelector") }}
+                  />
+                </div>
+              </Show>
+              <div
+                data-slot="permission-preview-scroll"
+                role="region"
+                aria-label={language.t("session.permission.preview.region")}
+                tabIndex={0}
+              >
+                <File mode="diff" fileDiff={resolveFileDiff(diff())} diffStyle="unified" />
+              </div>
+            </div>
+          )}
+        </Show>
       </Show>
       <Switch>
         <Match when={store.stage === "always"}>

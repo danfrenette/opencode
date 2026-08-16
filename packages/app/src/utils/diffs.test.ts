@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { FileDiffInfo } from "@opencode-ai/client/promise"
 import type { Message } from "@/types"
-import { diffs, message } from "./diffs"
+import { canonicalDiffs, diffs, message } from "./diffs"
 
 const item = {
   file: "src/app.ts",
@@ -32,6 +32,42 @@ describe("diffs", () => {
         { patch: item.patch, additions: 1, deletions: 1 },
       ]),
     ).toEqual([item])
+  })
+})
+
+describe("canonicalDiffs", () => {
+  test("keeps canonical file metadata arrays", () => {
+    expect(canonicalDiffs([item])).toEqual([item])
+    expect(canonicalDiffs([])).toEqual([])
+  })
+
+  test("rejects non-array metadata", () => {
+    expect(canonicalDiffs(item)).toBeUndefined()
+    expect(canonicalDiffs({ file: item })).toBeUndefined()
+    expect(canonicalDiffs(undefined)).toBeUndefined()
+  })
+
+  test("rejects an array when any entry is malformed", () => {
+    expect(canonicalDiffs([item, { ...item, patch: undefined }])).toBeUndefined()
+    expect(canonicalDiffs([item, null])).toBeUndefined()
+  })
+
+  test("requires canonical status and non-negative integer counts", () => {
+    expect(canonicalDiffs([{ ...item, status: undefined }])).toBeUndefined()
+    expect(canonicalDiffs([{ ...item, status: "renamed" }])).toBeUndefined()
+    expect(canonicalDiffs([{ ...item, additions: -1 }])).toBeUndefined()
+    expect(canonicalDiffs([{ ...item, additions: 0.5 }])).toBeUndefined()
+    expect(canonicalDiffs([{ ...item, deletions: Number.NaN }])).toBeUndefined()
+  })
+
+  test("requires every canonical field to have its JSON wire type", () => {
+    expect(canonicalDiffs([{ ...item, file: undefined }])).toBeUndefined()
+    expect(canonicalDiffs([{ ...item, file: 1 }])).toBeUndefined()
+    expect(canonicalDiffs([{ ...item, patch: null }])).toBeUndefined()
+    expect(canonicalDiffs([{ ...item, additions: "1" }])).toBeUndefined()
+    expect(canonicalDiffs([{ ...item, deletions: Number.POSITIVE_INFINITY }])).toBeUndefined()
+    expect(canonicalDiffs([true])).toBeUndefined()
+    expect(canonicalDiffs([[]])).toBeUndefined()
   })
 })
 

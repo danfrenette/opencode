@@ -2,6 +2,7 @@ import type { FileDiffInfo } from "@opencode-ai/client/promise"
 import type { Message } from "@/types"
 
 type Diff = FileDiffInfo
+type CanonicalDiff = Diff & { status: NonNullable<Diff["status"]> }
 
 function diff(value: unknown): value is Diff {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false
@@ -10,6 +11,13 @@ function diff(value: unknown): value is Diff {
   if (!("additions" in value) || typeof value.additions !== "number") return false
   if (!("deletions" in value) || typeof value.deletions !== "number") return false
   if (!("status" in value) || value.status === undefined) return true
+  return value.status === "added" || value.status === "deleted" || value.status === "modified"
+}
+
+function canonicalDiff(value: unknown): value is CanonicalDiff {
+  if (!diff(value)) return false
+  if (!Number.isInteger(value.additions) || value.additions < 0) return false
+  if (!Number.isInteger(value.deletions) || value.deletions < 0) return false
   return value.status === "added" || value.status === "deleted" || value.status === "modified"
 }
 
@@ -23,6 +31,11 @@ export function diffs(value: unknown): Diff[] {
   if (diff(value)) return [value]
   if (!object(value)) return []
   return Object.values(value).filter(diff)
+}
+
+export function canonicalDiffs(value: unknown): CanonicalDiff[] | undefined {
+  if (!Array.isArray(value) || !value.every(canonicalDiff)) return undefined
+  return value
 }
 
 export function message(value: Message): Message {

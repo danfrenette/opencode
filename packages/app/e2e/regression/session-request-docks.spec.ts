@@ -111,6 +111,254 @@ test("shows a pending question dock", async ({ page }) => {
   expect((await reply).postDataJSON()).toEqual({ answer: { q0: "minimal" } })
 })
 
+test("previews a pending edit without hiding permission choices", async ({ page }) => {
+  await mockServer(page, {
+    permissions: [
+      {
+        id: "permission-edit-small",
+        sessionID,
+        action: "edit",
+        resources: ["src/config.ts"],
+        save: ["*"],
+        metadata: {
+          files: [
+            {
+              file: "src/config.ts",
+              patch: "@@ -1 +1 @@\n-export const mode = 'old'\n+export const mode = 'new'\n",
+              additions: 1,
+              deletions: 1,
+              status: "modified",
+            },
+          ],
+        },
+      },
+    ],
+  })
+  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await expectSessionTitle(page, title)
+
+  const permission = page.locator('[data-component="dock-prompt"][data-kind="permission"]')
+  await expect(permission.getByText("export const mode = 'old'", { exact: true })).toBeVisible()
+  await expect(permission.getByText("export const mode = 'new'", { exact: true })).toBeVisible()
+  await expect
+    .poll(() =>
+      permission
+        .locator('[data-slot="permission-preview-scroll"]')
+        .evaluate((element) => element.scrollHeight === element.clientHeight),
+    )
+    .toBe(true)
+  await expect(permission.getByRole("button", { name: "Allow once" })).toBeEnabled()
+  await expect(permission.getByRole("button", { name: "Allow always" })).toBeEnabled()
+  await expect(permission.getByRole("button", { name: "Deny" })).toBeEnabled()
+  await permission.getByRole("button", { name: "Allow always" }).click()
+  await expect(permission.getByRole("button", { name: "Confirm" })).toBeFocused()
+  await expect(permission.getByText("export const mode = 'new'", { exact: true })).toBeVisible()
+})
+
+test("selects preview files without losing decision state and resets for the next request", async ({ page }) => {
+  const transport = await installSseTransport<RequestDockEvent>(page, {
+    server: `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`,
+    retry: 20,
+  })
+  await mockServer(page, {
+    permissions: [
+      {
+        id: "permission-edit-multi",
+        sessionID,
+        action: "edit",
+        resources: ["src/first.ts", "src/second.ts"],
+        save: ["*"],
+        metadata: {
+          files: [
+            {
+              file: "src/first.ts",
+              patch: "@@ -1 +1 @@\n-first old content\n+first new content\n",
+              additions: 1,
+              deletions: 1,
+              status: "modified",
+            },
+            {
+              file: "src/second.ts",
+              patch: "@@ -1 +1 @@\n-second old content\n+second new content\n",
+              additions: 1,
+              deletions: 1,
+              status: "modified",
+            },
+          ],
+        },
+      },
+      {
+        id: "permission-edit-next",
+        sessionID,
+        action: "edit",
+        resources: ["src/next.ts"],
+        save: [],
+        metadata: {
+          files: [
+            {
+              file: "src/next.ts",
+              patch: "@@ -1 +1 @@\n-next old content\n+next new content\n",
+              additions: 1,
+              deletions: 1,
+              status: "modified",
+            },
+          ],
+        },
+      },
+    ],
+  })
+  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await transport.waitForConnection()
+  await expectSessionTitle(page, title)
+
+  const permission = page.locator('[data-component="dock-prompt"][data-kind="permission"]')
+  await expect(permission.getByText("first new content", { exact: true })).toBeVisible()
+  await permission.getByRole("button", { name: "Deny" }).click()
+  const feedback = permission.getByRole("textbox", { name: "Corrective feedback" })
+  await feedback.fill("Keep the public API")
+
+  const selector = permission.getByRole("button", { name: /^Preview file/ })
+  await selector.focus()
+  await page.keyboard.press("Enter")
+  await expect(page.getByRole("option", { name: "src/second.ts Modified +1 -1" })).toBeVisible()
+  await page.keyboard.press("ArrowDown")
+  await page.keyboard.press("Enter")
+  await expect(permission.getByText("second new content", { exact: true })).toBeVisible()
+  await expect(permission.getByRole("button", { name: "Deny permission" })).toBeVisible()
+  await expect(feedback).toHaveValue("Keep the public API")
+
+  await transport.send({
+    directory,
+    payload: {
+      type: "permission.replied",
+      properties: { sessionID, requestID: "permission-edit-multi", reply: "reject" },
+    },
+  })
+  await expect(permission.getByText("next new content", { exact: true })).toBeVisible()
+  await expect(permission.getByRole("button", { name: "Allow once" })).toBeFocused()
+  await expect(permission.getByRole("textbox", { name: "Corrective feedback" })).toHaveCount(0)
+  await expect(permission.getByRole("button", { name: /^Preview file/ })).toHaveCount(0)
+})
+
+test("warns for malformed edit metadata without blocking a decision", async ({ page }) => {
+  await mockServer(page, {
+    permissions: [
+      {
+        id: "permission-edit-malformed",
+        sessionID,
+        action: "edit",
+        resources: ["src/valid.ts", "src/invalid.ts"],
+        save: [],
+        metadata: {
+          files: [
+            {
+              file: "src/valid.ts",
+              patch: "@@ -1 +1 @@\n-valid old content\n+valid new content\n",
+              additions: 1,
+              deletions: 1,
+              status: "modified",
+            },
+            {
+              file: "src/invalid.ts",
+              patch: "@@ -1 +1 @@\n-invalid old content\n+invalid new content\n",
+              additions: -1,
+              deletions: 1,
+              status: "modified",
+            },
+          ],
+        },
+      },
+    ],
+  })
+  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await expectSessionTitle(page, title)
+
+  const permission = page.locator('[data-component="dock-prompt"][data-kind="permission"]')
+  await expect(permission.getByText("A preview isn't available for this edit. You can still allow or deny it.")).toBeVisible()
+  await expect(permission.getByText("valid new content", { exact: true })).toHaveCount(0)
+  await expect(permission.getByRole("button", { name: "Allow once" })).toBeEnabled()
+  await expect(permission.getByRole("button", { name: "Deny" })).toBeEnabled()
+
+  const reply = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === `/api/session/${sessionID}/permission/permission-edit-malformed/reply`,
+  )
+  await permission.getByRole("button", { name: "Allow once" }).click()
+  expect((await reply).postDataJSON()).toEqual({ reply: "once" })
+  await expect(permission.getByRole("button", { name: "Allow once" })).toBeDisabled()
+  await expect(permission.getByRole("button", { name: "Deny" })).toBeDisabled()
+})
+
+test("keeps a large mobile edit preview bounded and its actions reachable", async ({ page }) => {
+  await page.setViewportSize({ width: 430, height: 800 })
+  const lines = Array.from({ length: 120 }, (_, index) => index + 1)
+  const patch = [
+    "@@ -1,120 +1,120 @@",
+    ...lines.map((line) => `-old mobile line ${line}`),
+    ...lines.map((line) => `+new mobile line ${line}`),
+    "",
+  ].join("\n")
+  await mockServer(page, {
+    permissions: [
+      {
+        id: "permission-edit-large",
+        sessionID,
+        action: "edit",
+        resources: ["src/large.ts", "src/small.ts"],
+        save: ["*"],
+        metadata: {
+          files: [
+            {
+              file: "src/large.ts",
+              patch,
+              additions: 120,
+              deletions: 120,
+              status: "modified",
+            },
+            {
+              file: "src/small.ts",
+              patch: "@@ -1 +1 @@\n-small old content\n+small new content\n",
+              additions: 1,
+              deletions: 1,
+              status: "modified",
+            },
+          ],
+        },
+      },
+    ],
+  })
+  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await expectSessionTitle(page, title)
+
+  const permission = page.locator('[data-component="dock-prompt"][data-kind="permission"]')
+  const preview = permission.locator('[data-slot="permission-preview-scroll"]')
+  await expect(permission.getByText("new mobile line 120", { exact: true })).toBeVisible()
+  await expect.poll(() => preview.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
+  await expect
+    .poll(() =>
+      permission
+        .locator('[data-component="file"] [data-line-number-content]')
+        .evaluateAll((elements) => elements.every((element) => element.getClientRects().length === 0)),
+    )
+    .toBe(true)
+
+  const selector = permission.getByRole("button", { name: /^Preview file/ })
+  const once = permission.getByRole("button", { name: "Allow once" })
+  await expect(selector).toBeInViewport()
+  await expect(once).toBeInViewport()
+  await expect
+    .poll(() =>
+      once.evaluate((element) => {
+        const bounds = element.getBoundingClientRect()
+        return bounds.top >= 0 && bounds.left >= 0 && bounds.bottom <= window.innerHeight && bounds.right <= window.innerWidth
+      }),
+    )
+    .toBe(true)
+  await expect.poll(() => selector.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44)
+  await expect.poll(() => once.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44)
+})
+
 test("confirms persistent permission and waits for authoritative removal", async ({ page }) => {
   const transport = await installSseTransport<RequestDockEvent>(page, {
     server: `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`,
@@ -154,6 +402,7 @@ test("confirms persistent permission and waits for authoritative removal", async
   await expect(permission).toBeVisible()
   await expect(permission.getByText("git status")).toBeVisible()
   await expect(permission.getByText("git diff")).toBeVisible()
+  await expect(permission.locator('[data-slot="permission-preview"]')).toHaveCount(0)
   await expect(permission.locator('[data-slot="permission-footer-actions"] button')).toHaveCount(3)
   await expect(page.locator('[data-component="session-composer"]')).toHaveCount(0)
 
@@ -264,19 +513,31 @@ test("denies a child permission with corrective feedback without leaving the par
       properties: {
         id: "permission-child-reject",
         sessionID: childID,
-        action: "webfetch",
-        resources: ["https://example.com"],
-        metadata: {},
+        action: "edit",
+        resources: ["src/child.ts"],
+        metadata: {
+          files: [
+            {
+              file: "src/child.ts",
+              patch: "@@ -1 +1 @@\n-child old content\n+child new content\n",
+              additions: 1,
+              deletions: 1,
+              status: "modified",
+            },
+          ],
+        },
       },
     },
   })
 
   const permission = page.locator('[data-component="dock-prompt"][data-kind="permission"]')
   await expect(permission.getByText("Requested by Research subagent")).toBeVisible()
+  await expect(permission.getByText("child new content", { exact: true })).toBeVisible()
   await expect(page).toHaveURL(new RegExp(`/session/${sessionID}$`))
 
   await permission.getByRole("button", { name: "Deny" }).click()
   await expect(permission.getByText("Requested by Research subagent")).toBeVisible()
+  await expect(permission.getByText("child new content", { exact: true })).toBeVisible()
   const feedback = permission.getByRole("textbox", { name: "Corrective feedback" })
   await expect(feedback).toBeFocused()
   await permission.getByRole("button", { name: "Cancel" }).click()
