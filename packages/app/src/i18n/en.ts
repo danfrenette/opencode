@@ -638,6 +638,15 @@ export const dict = {
 
   "notification.permission.title": "Permission required",
   "notification.permission.description": "{{sessionTitle}} in {{projectName}} needs permission",
+  "session.permission.source": "Requested by {{name}}",
+  "session.permission.always.title": "Always allow",
+  "session.permission.always.description.all": "This will allow {{action}} until OpenCode is restarted.",
+  "session.permission.always.description.patterns":
+    "This will allow the following patterns until OpenCode is restarted.",
+  "session.permission.reject.title": "Deny permission",
+  "session.permission.reject.feedback": "Corrective feedback",
+  "session.permission.reject.placeholder": "Tell OpenCode what to do differently",
+  "session.permission.reject.submit": "Deny permission",
   "notification.question.title": "Question",
   "notification.question.description": "{{sessionTitle}} in {{projectName}} has a question",
   "notification.action.goToSession": "Go to session",

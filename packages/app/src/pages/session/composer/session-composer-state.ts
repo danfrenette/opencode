@@ -213,20 +213,35 @@ export function createSessionComposerController(options?: { closeMs?: number | (
     return store.responding === perm.id
   })
 
-  const decide = (response: "once" | "always" | "reject") => {
+  const permissionSource = createMemo(() => {
+    const perm = permissionRequest()
+    if (!perm || perm.sessionID === params.id) return
+    return sync().data.session.find((item) => item.id === perm.sessionID)?.title ?? perm.sessionID
+  })
+
+  createEffect(() => {
+    const id = permissionRequest()?.id
+    if (!store.responding || store.responding === id) return
+    setStore("responding", undefined)
+  })
+
+  const decide = (response: "once" | "always" | "reject", message?: string) => {
     const perm = permissionRequest()
     if (!perm) return
     if (store.responding === perm.id) return
 
     setStore("responding", perm.id)
     sdk()
-      .api.permission.reply({ sessionID: perm.sessionID, requestID: perm.id, reply: response })
+      .api.permission.reply({
+        sessionID: perm.sessionID,
+        requestID: perm.id,
+        reply: response,
+        ...(message ? { message } : {}),
+      })
       .catch((err: unknown) => {
+        setStore("responding", (id) => (id === perm.id ? undefined : id))
         const description = err instanceof Error ? err.message : String(err)
         showToast({ title: language.t("common.requestFailed"), description })
-      })
-      .finally(() => {
-        setStore("responding", (id) => (id === perm.id ? undefined : id))
       })
   }
 
@@ -328,6 +343,7 @@ export function createSessionComposerController(options?: { closeMs?: number | (
     questionRequest,
     permissionRequest,
     permissionResponding,
+    permissionSource,
     background: {
       blocking: backgroundBlocking,
       tasks: backgroundTasks,
