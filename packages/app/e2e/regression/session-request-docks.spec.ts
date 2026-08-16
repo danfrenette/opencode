@@ -20,6 +20,7 @@ const directory = "C:/OpenCode/RequestDocks"
 const projectID = "proj_request_docks"
 const sessionID = "ses_request_docks"
 const title = "Request dock regression"
+const server = `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`
 
 type RequestDockEvent = {
   directory: string
@@ -43,6 +44,7 @@ type RequestDockFixtures = {
   sessionStatus?: Record<string, SessionStatus>
   sessions?: SessionFixture[]
   vcsDiff?: FileDiffInfo[]
+  openSessions?: string[]
 }
 
 test("shows a pending question dock", async ({ page }) => {
@@ -368,6 +370,104 @@ test("keeps permission decisions reachable in expanded mobile review", async ({ 
   await expect(page.getByRole("tab", { name: "Session", selected: true })).toBeVisible()
   await expect(permission.getByText("mobile first new", { exact: true })).toBeVisible()
   await expect(permission.getByRole("button", { name: "Confirm" })).toBeVisible()
+})
+
+test("restores the mobile session tab when navigating away from expanded review", async ({ page }) => {
+  await page.setViewportSize({ width: 430, height: 800 })
+  const nextSessionID = "ses_request_docks_next"
+  const nextTitle = "Next request dock session"
+  await mockServer(page, {
+    openSessions: [sessionID, nextSessionID],
+    sessions: [
+      {
+        id: nextSessionID,
+        slug: "request-docks-next",
+        projectID,
+        directory,
+        title: nextTitle,
+        version: "dev",
+        time: { created: 1700000001000, updated: 1700000001000 },
+      },
+    ],
+    permissions: [
+      {
+        id: "permission-edit-mobile-navigation",
+        sessionID,
+        action: "edit",
+        resources: ["src/mobile-navigation.ts"],
+        save: [],
+        metadata: {
+          files: [
+            {
+              file: "src/mobile-navigation.ts",
+              patch: "@@ -1 +1 @@\n-navigation old\n+navigation new\n",
+              additions: 1,
+              deletions: 1,
+              status: "modified",
+            },
+          ],
+        },
+      },
+    ],
+  })
+  await page.goto(`/server/${base64Encode(server)}/session/${sessionID}`)
+  await expectSessionTitle(page, title)
+
+  await page.locator('[data-permission-surface="compact"]').getByRole("button", { name: "Review changes" }).click()
+  await expect(page.getByRole("tab", { name: /Files Changed/, selected: true })).toBeVisible()
+
+  await page.locator("[data-titlebar-tab-slot]", { hasText: nextTitle }).click()
+
+  await expectSessionTitle(page, nextTitle)
+  await expect(page.getByRole("tab", { name: "Session", selected: true })).toBeVisible()
+  await expect(page.locator('[data-permission-surface="compact"]')).toHaveCount(0)
+})
+
+test("preserves expanded edit feedback after a failed reply", async ({ page }) => {
+  await mockServer(page, {
+    permissions: [
+      {
+        id: "permission-edit-expanded-retry",
+        sessionID,
+        action: "edit",
+        resources: ["src/expanded-retry.ts"],
+        save: [],
+        metadata: {
+          files: [
+            {
+              file: "src/expanded-retry.ts",
+              patch: "@@ -1 +1 @@\n-expanded retry old\n+expanded retry new\n",
+              additions: 1,
+              deletions: 1,
+              status: "modified",
+            },
+          ],
+        },
+      },
+    ],
+  })
+  await page.route(`**/api/session/${sessionID}/permission/permission-edit-expanded-retry/reply`, (route) =>
+    route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ message: "No reply" }) }),
+  )
+  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await expectSessionTitle(page, title)
+
+  const compact = page.locator('[data-permission-surface="compact"]')
+  await compact.getByRole("button", { name: "Deny" }).click()
+  await compact.getByRole("textbox", { name: "Corrective feedback" }).fill("Keep expanded feedback")
+  await compact.getByRole("button", { name: "Review changes" }).click()
+
+  const panel = page.locator("#review-panel")
+  const reviewPermission = panel.locator('[data-permission-surface="review"]')
+  await reviewPermission.getByRole("button", { name: "Deny permission" }).click()
+
+  await expect(page.getByText("Request failed")).toBeVisible()
+  await expect(panel.getByText("expanded retry new", { exact: true })).toBeVisible()
+  await expect(reviewPermission.getByRole("textbox", { name: "Corrective feedback" })).toHaveValue(
+    "Keep expanded feedback",
+  )
+  await expect(compact.getByRole("textbox", { name: "Corrective feedback" })).toHaveValue("Keep expanded feedback")
+  await expect(reviewPermission.getByRole("button", { name: "Deny permission" })).toBeEnabled()
 })
 
 test("restores normal review only after authoritative permission replacement", async ({ page }) => {
@@ -980,7 +1080,15 @@ async function mockServer(page: Page, fixtures: RequestDockFixtures) {
     sessionStatus: fixtures.sessionStatus,
     vcsDiff: fixtures.vcsDiff,
   })
-  await page.addInitScript(() => {
-    localStorage.setItem("settings.v3", JSON.stringify({ general: { newLayoutDesigns: true } }))
-  })
+  await page.addInitScript(
+    ({ server, sessions }) => {
+      localStorage.setItem("settings.v3", JSON.stringify({ general: { newLayoutDesigns: true } }))
+      if (!sessions.length) return
+      localStorage.setItem(
+        "opencode.window.browser.dat:tabs",
+        JSON.stringify(sessions.map((sessionId) => ({ type: "session", server, sessionId }))),
+      )
+    },
+    { server, sessions: fixtures.openSessions ?? [] },
+  )
 }

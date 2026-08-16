@@ -1455,7 +1455,7 @@ export default function Page() {
       if (!snapshot.panelOpened) view.reviewPanel.close()
       layout.tabs(snapshot.sessionKey).setActive(snapshot.activeTab)
       reviewV2State.setFilter(snapshot.reviewFilter)
-      if (controller.identity.sessionKey() === snapshot.sessionKey) setStore("mobileTab", snapshot.mobileTab)
+      setStore("mobileTab", snapshot.mobileTab)
     })
     if (!focus || controller.identity.sessionKey() !== snapshot.sessionKey) return
     queueMicrotask(() => {
