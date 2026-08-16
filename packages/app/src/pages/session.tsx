@@ -71,6 +71,7 @@ import {
   createSessionComposerController,
   createSessionComposerRegionController,
   SessionComposerRegion,
+  SessionPermissionDock,
 } from "@/pages/session/composer"
 import { createOpenReviewFile, createSizing, shouldShowFileTree } from "@/pages/session/helpers"
 import { MessageTimeline } from "@/pages/session/timeline/message-timeline"
@@ -111,6 +112,14 @@ const emptyFollowups: FollowupItem[] = []
 
 type ChangeMode = "git" | "branch" | "turn"
 type VcsMode = "git" | "branch"
+type PermissionReviewSnapshot = {
+  requestID: string
+  sessionKey: string
+  panelOpened: boolean
+  activeTab?: string
+  mobileTab: "session" | "changes"
+  reviewFilter: string
+}
 
 const sessionViewState = () => ({
   messageId: undefined as string | undefined,
@@ -378,6 +387,7 @@ export default function Page() {
       bottom: true,
       jump: false,
     },
+    permissionReview: undefined as PermissionReviewSnapshot | undefined,
   })
 
   const composer = createSessionComposerController()
@@ -568,6 +578,11 @@ export default function Page() {
   }, desktopReviewOpen())
 
   const turnDiffs = createMemo(() => list(lastUserMessage()?.summary?.diffs))
+  const pendingPermissionReview = createMemo(() => {
+    const snapshot = ui.permissionReview
+    const request = composer.permissionRequest()
+    return !!snapshot && snapshot.requestID === request?.id && composer.permission.expanded()
+  })
   const nogit = createMemo(() => {
     const project = sync().project
     return !!project && project.vcs !== "git"
@@ -607,7 +622,11 @@ export default function Page() {
   )
   const vcsQuery = createQuery(() => {
     const mode = vcsMode()
-    const enabled = serverSDK.connection.status() === "connected" && wantsReview() && sync().project?.vcs === "git"
+    const enabled =
+      serverSDK.connection.status() === "connected" &&
+      wantsReview() &&
+      !pendingPermissionReview() &&
+      sync().project?.vcs === "git"
 
     return {
       queryKey: [...vcsKey(), mode] as const,
@@ -660,15 +679,18 @@ export default function Page() {
       return vcsQuery.isFetched ? (vcsQuery.data ?? []) : []
     return turnDiffs()
   }
+  const displayedReviewDiffs = () => (pendingPermissionReview() ? (composer.permission.files() ?? []) : reviewDiffs())
   const activeReviewFile = () => {
-    const diffs = reviewDiffs()
+    if (pendingPermissionReview()) return composer.permission.file()
+    const diffs = displayedReviewDiffs()
     const selected = reviewFile()
     if (selected && diffs.some((diff) => diff.file === selected)) return selected
     return diffs[0]?.file
   }
-  const reviewCount = () => reviewDiffs().length
+  const reviewCount = () => displayedReviewDiffs().length
   const hasReview = () => reviewCount() > 0
   const reviewReady = () => {
+    if (pendingPermissionReview()) return true
     if (reviewMode() === "git" || reviewMode() === "branch") return !vcsQuery.isPending
     return true
   }
@@ -1109,6 +1131,9 @@ export default function Page() {
   }
 
   const changesTitle = () => {
+    if (pendingPermissionReview()) {
+      return <span class="text-14-medium">{language.t("session.permission.preview.reviewTitle")}</span>
+    }
     if (!canReview()) {
       return null
     }
@@ -1127,6 +1152,9 @@ export default function Page() {
   }
 
   const changesTitleV2 = () => {
+    if (pendingPermissionReview()) {
+      return <span class="text-14-medium">{language.t("session.permission.preview.reviewTitle")}</span>
+    }
     if (!canReview()) {
       return null
     }
@@ -1208,23 +1236,28 @@ export default function Page() {
       <SessionReviewTab
         title={changesTitle()}
         empty={reviewEmpty(input)}
-        diffs={reviewDiffs()}
+        diffs={displayedReviewDiffs()}
         view={controller.layout.view()}
         diffStyle={input.diffStyle}
         onDiffStyleChange={input.onDiffStyleChange}
         onScrollRef={(el) => setTree("reviewScroll", el)}
         focusedFile={activeReviewFile()}
-        onLineComment={(comment) => addCommentToContext({ ...comment, origin: "review" })}
-        onLineCommentUpdate={updateCommentInContext}
-        onLineCommentDelete={removeCommentFromContext}
-        lineCommentActions={reviewCommentActions()}
+        open={pendingPermissionReview() ? composer.permission.open() : undefined}
+        onOpenChange={pendingPermissionReview() ? composer.permission.setOpen : undefined}
+        persistScroll={!pendingPermissionReview()}
+        onLineComment={
+          pendingPermissionReview() ? undefined : (comment) => addCommentToContext({ ...comment, origin: "review" })
+        }
+        onLineCommentUpdate={pendingPermissionReview() ? undefined : updateCommentInContext}
+        onLineCommentDelete={pendingPermissionReview() ? undefined : removeCommentFromContext}
+        lineCommentActions={pendingPermissionReview() ? undefined : reviewCommentActions()}
         commentMentions={{
           items: file.searchFilesAndDirectories,
         }}
-        comments={comments.all()}
-        focusedComment={comments.focus()}
-        onFocusedCommentChange={comments.setFocus}
-        onViewFile={openReviewFile}
+        comments={pendingPermissionReview() ? undefined : comments.all()}
+        focusedComment={pendingPermissionReview() ? undefined : comments.focus()}
+        onFocusedCommentChange={pendingPermissionReview() ? undefined : comments.setFocus}
+        onViewFile={pendingPermissionReview() ? undefined : openReviewFile}
         classes={input.classes}
       />
     </Show>
@@ -1243,15 +1276,17 @@ export default function Page() {
       return reviewEmptyV2()
     },
     get diffs() {
-      return reviewDiffs()
+      return displayedReviewDiffs()
     },
     get diffsReady() {
       return reviewReady()
     },
     get diffVersion() {
-      return vcsQuery.dataUpdatedAt
+      return pendingPermissionReview() ? undefined : vcsQuery.dataUpdatedAt
     },
-    loadDiff: loadReviewDiff,
+    get loadDiff() {
+      return pendingPermissionReview() ? undefined : loadReviewDiff
+    },
     get activeFile() {
       return activeReviewFile()
     },
@@ -1261,27 +1296,37 @@ export default function Page() {
     },
     onDiffStyleChange: layout.review.setDiffStyle,
     state: reviewV2State,
-    onLineComment: (comment: SessionReviewLineComment) => addCommentToContext({ ...comment, origin: "review" }),
-    onLineCommentUpdate: updateCommentInContext,
-    onLineCommentDelete: removeCommentFromContext,
+    get onLineComment() {
+      if (pendingPermissionReview()) return
+      return (comment: SessionReviewLineComment) => addCommentToContext({ ...comment, origin: "review" })
+    },
+    get onLineCommentUpdate() {
+      return pendingPermissionReview() ? undefined : updateCommentInContext
+    },
+    get onLineCommentDelete() {
+      return pendingPermissionReview() ? undefined : removeCommentFromContext
+    },
     get lineCommentActions() {
-      return reviewCommentActions()
+      return pendingPermissionReview() ? undefined : reviewCommentActions()
     },
     get comments() {
-      return comments.all()
+      return pendingPermissionReview() ? undefined : comments.all()
     },
     get focusedComment() {
-      return comments.focus()
+      return pendingPermissionReview() ? undefined : comments.focus()
     },
-    onFocusedCommentChange: (focus: { file: string; id: string } | null) => {
-      // The preview clears the focus once it has opened the comment; persist the
-      // focused file as the active selection so the preview stays on it. Skip
-      // files outside the current diff set (their focus is cleared unhandled).
-      if (!focus) {
-        const current = comments.focus()
-        if (current && reviewDiffs().some((diff) => diff.file === current.file)) focusReviewDiff(current.file)
+    get onFocusedCommentChange() {
+      if (pendingPermissionReview()) return
+      return (focus: { file: string; id: string } | null) => {
+        // The preview clears the focus once it has opened the comment; persist the
+        // focused file as the active selection so the preview stays on it. Skip
+        // files outside the current diff set (their focus is cleared unhandled).
+        if (!focus) {
+          const current = comments.focus()
+          if (current && reviewDiffs().some((diff) => diff.file === current.file)) focusReviewDiff(current.file)
+        }
+        comments.setFocus(focus)
       }
-      comments.setFocus(focus)
     },
   })
 
@@ -1290,11 +1335,35 @@ export default function Page() {
   // deferRender flip tore down and remounted the whole review pane on tab switch.
   const reviewPanelV2Rendered = createMemo<boolean>((prev) => prev || !store.deferRender, false)
 
+  const reviewPermissionControls = () => (
+    <Show when={isDesktop() && pendingPermissionReview() && composer.permissionRequest()} keyed>
+      {(request) => (
+        <div class="shrink-0 p-3 pt-0">
+          <SessionPermissionDock
+            request={request}
+            source={composer.permissionSource()}
+            responding={composer.permissionResponding()}
+            state={composer.permission}
+            surface="review"
+            onReview={togglePermissionReview}
+            onDecide={(decision) => {
+              resumeScroll()
+              composer.decide(decision)
+            }}
+          />
+        </div>
+      )}
+    </Show>
+  )
+
   const reviewPanelV2 = () => (
     <div class="flex flex-col h-full overflow-hidden bg-v2-background-bg-base contain-strict">
-      <Show when={reviewPanelV2Rendered()}>
-        <ReviewPanelV2 {...reviewPanelV2Props()} />
-      </Show>
+      <div class="flex-1 min-h-0 overflow-hidden">
+        <Show when={reviewPanelV2Rendered()}>
+          <ReviewPanelV2 {...reviewPanelV2Props()} />
+        </Show>
+      </div>
+      {reviewPermissionControls()}
     </div>
   )
 
@@ -1314,6 +1383,7 @@ export default function Page() {
           emptyClass: "h-full pb-64 -mt-4 flex flex-col items-center justify-center text-center gap-6",
         })}
       </div>
+      {reviewPermissionControls()}
     </div>
   )
 
@@ -1365,10 +1435,83 @@ export default function Page() {
 
   const focusReviewDiff = (path: string) => {
     openReviewPanel()
+    if (pendingPermissionReview()) {
+      composer.permission.select(path)
+      return
+    }
     controller.layout.view().review.openPath(path)
     controller.layout.view().review.setFile(path)
     setTree("pendingDiff", path)
   }
+
+  const restorePermissionReview = (focus = false) => {
+    const snapshot = ui.permissionReview
+    if (!snapshot) return
+    batch(() => {
+      setUi("permissionReview", undefined)
+      composer.permission.collapse()
+      const view = layout.view(snapshot.sessionKey)
+      if (snapshot.panelOpened) view.reviewPanel.open()
+      if (!snapshot.panelOpened) view.reviewPanel.close()
+      layout.tabs(snapshot.sessionKey).setActive(snapshot.activeTab)
+      reviewV2State.setFilter(snapshot.reviewFilter)
+      if (controller.identity.sessionKey() === snapshot.sessionKey) setStore("mobileTab", snapshot.mobileTab)
+    })
+    if (!focus || controller.identity.sessionKey() !== snapshot.sessionKey) return
+    queueMicrotask(() => {
+      const trigger = document.querySelector('[data-permission-surface="compact"] [data-permission-review-trigger]')
+      if (trigger instanceof HTMLElement) trigger.focus()
+    })
+  }
+
+  const togglePermissionReview = () => {
+    if (pendingPermissionReview()) {
+      restorePermissionReview(true)
+      return
+    }
+    const request = composer.permissionRequest()
+    const sessionKey = controller.identity.sessionKey()
+    if (!request || !sessionKey || !composer.permission.files()?.length) return
+    composer.permission.expand()
+    setUi("permissionReview", {
+      requestID: request.id,
+      sessionKey,
+      panelOpened: controller.layout.view().reviewPanel.opened(),
+      activeTab: controller.layout.tabs().active(),
+      mobileTab: store.mobileTab,
+      reviewFilter: reviewV2State.filter(),
+    })
+    reviewV2State.setFilter("")
+    queueMicrotask(() => {
+      const trigger = document.querySelector(
+        `${isDesktop() ? '[data-permission-surface="review"]' : '[data-permission-surface="compact"]'} [data-permission-review-trigger]`,
+      )
+      if (trigger instanceof HTMLElement) trigger.focus()
+    })
+  }
+
+  createEffect(() => {
+    const snapshot = ui.permissionReview
+    if (!snapshot) return
+    const request = composer.permissionRequest()
+    if (
+      snapshot.sessionKey === controller.identity.sessionKey() &&
+      snapshot.requestID === request?.id &&
+      composer.permission.expanded()
+    )
+      return
+    untrack(restorePermissionReview)
+  })
+
+  createEffect(() => {
+    if (!pendingPermissionReview()) return
+    if (isDesktop()) {
+      controller.layout.view().reviewPanel.open()
+      controller.layout.tabs().setActive("review")
+      return
+    }
+    setStore("mobileTab", "changes")
+  })
 
   createEffect(() => {
     const pending = tree.pendingDiff
@@ -2092,7 +2235,9 @@ export default function Page() {
         </Switch>
       </div>
 
-      <Show when={(controller.identity.params.id || !newSessionDesign()) && !mobileChanges()}>
+      <Show
+        when={(controller.identity.params.id || !newSessionDesign()) && (!mobileChanges() || pendingPermissionReview())}
+      >
         {(_) => {
           const region = createSessionComposerRegionController({
             state: composer,
@@ -2143,6 +2288,7 @@ export default function Page() {
           return (
             <SessionComposerRegion
               controller={region}
+              onPermissionReview={togglePermissionReview}
               promptInput={
                 <Show
                   when={newSessionDesign()}
@@ -2280,7 +2426,7 @@ export default function Page() {
           <Suspense>
             <SessionSidePanel
               canReview={canReview()}
-              diffs={reviewDiffs()}
+              diffs={displayedReviewDiffs()}
               diffsReady={reviewReady()}
               empty={reviewEmptyText()}
               hasReview={hasReview()}
@@ -2302,7 +2448,7 @@ export default function Page() {
                   <Suspense>
                     <SessionSidePanel
                       canReview={canReview()}
-                      diffs={reviewDiffs()}
+                      diffs={displayedReviewDiffs()}
                       diffsReady={reviewReady()}
                       empty={reviewEmptyText()}
                       hasReview={hasReview()}
