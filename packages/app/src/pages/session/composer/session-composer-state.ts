@@ -9,6 +9,7 @@ import { usePermission } from "@/context/permission"
 import { useWorkspaceLocation } from "@/context/location"
 import { sessionPermissionRequest, sessionQuestionForm } from "./session-request-tree"
 import { useData } from "@/context/server"
+import type { PermissionDecision } from "./session-permission-decision"
 
 const idle = { type: "idle" as const }
 
@@ -173,24 +174,18 @@ export function createSessionComposerController() {
     return data.session.list().find((item) => item.id === perm.sessionID)?.title ?? perm.sessionID
   })
 
-  createEffect(() => {
-    const id = permissionRequest()?.id
-    if (!store.responding || store.responding === id) return
-    setStore("responding", undefined)
-  })
-
-  const decide = (response: "once" | "always" | "reject", message?: string) => {
+  const decide = (decision: PermissionDecision) => {
     const perm = permissionRequest()
     if (!perm) return
     if (store.responding === perm.id) return
 
     setStore("responding", perm.id)
     serverSDK.api.permission
-      .api.permission.reply({
+      .reply({
         sessionID: perm.sessionID,
         requestID: perm.id,
-        reply: response,
-        ...(response === "reject" && message ? { message } : {}),
+        reply: decision.reply,
+        ...(decision.reply === "reject" && decision.message ? { message: decision.message } : {}),
       })
       .catch((err: unknown) => {
         setStore("responding", (id) => (id === perm.id ? undefined : id))
