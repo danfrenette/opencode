@@ -10,6 +10,7 @@ import type { SessionComposerRegionController } from "./session-composer-region-
 export function SessionComposerRegion(props: {
   controller: SessionComposerRegionController
   promptInput: JSX.Element
+  onPermissionReview: () => void
 }) {
   const language = useLanguage()
   const controller = props.controller
@@ -47,6 +48,8 @@ export function SessionComposerRegion(props: {
                 request={request}
                 source={controller.state.permissionSource()}
                 responding={controller.state.permissionResponding()}
+                state={controller.state.permission}
+                onReview={props.onPermissionReview}
                 onDecide={(decision) => {
                   controller.onResponseSubmit()
                   controller.state.decide(decision)

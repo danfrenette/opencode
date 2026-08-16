@@ -1,4 +1,4 @@
-import { createEffect, createMemo } from "solid-js"
+import { createEffect, createMemo, type Accessor } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { FormInfo, PermissionRequest } from "@opencode-ai/client/promise"
 import { useParams } from "@solidjs/router"
@@ -10,6 +10,85 @@ import { useWorkspaceLocation } from "@/context/location"
 import { sessionPermissionRequest, sessionQuestionForm } from "./session-request-tree"
 import { useData } from "@/context/server"
 import type { PermissionDecision } from "./session-permission-decision"
+import { canonicalDiffs } from "@/utils/diffs"
+
+export type PermissionStage = "permission" | "always" | "reject"
+
+export const permissionRequestFiles = (request: PermissionRequest | undefined) => {
+  if (request?.action !== "edit") return undefined
+  return canonicalDiffs(request.metadata?.files)
+}
+
+function createSessionPermissionController(request: Accessor<PermissionRequest | undefined>) {
+  const current = request()
+  const initialFiles = permissionRequestFiles(current)
+  const [store, setStore] = createStore({
+    requestID: current?.id,
+    sessionID: current?.sessionID,
+    stage: "permission" as PermissionStage,
+    message: "",
+    file: initialFiles?.[0]?.file,
+    open: initialFiles?.[0] ? [initialFiles[0].file] : ([] as string[]),
+    expanded: false,
+  })
+  const files = createMemo(() => permissionRequestFiles(request()))
+
+  createEffect(() => {
+    const current = request()
+    const nextFiles = files()
+    if (store.requestID !== current?.id || store.sessionID !== current?.sessionID) {
+      setStore({
+        requestID: current?.id,
+        sessionID: current?.sessionID,
+        stage: "permission",
+        message: "",
+        file: nextFiles?.[0]?.file,
+        open: nextFiles?.[0] ? [nextFiles[0].file] : [],
+        expanded: false,
+      })
+      return
+    }
+
+    if (!nextFiles?.length) {
+      setStore({ file: undefined, open: [], expanded: false })
+      return
+    }
+    if (store.file && nextFiles.some((diff) => diff.file === store.file)) return
+    setStore({ file: nextFiles[0].file, open: [nextFiles[0].file] })
+  })
+
+  const select = (file: string) => {
+    if (!files()?.some((diff) => diff.file === file)) return
+    setStore({ file, open: [file] })
+  }
+
+  return {
+    files,
+    stage: () => store.stage,
+    message: () => store.message,
+    setMessage: (message: string) => setStore("message", message),
+    file: () => store.file,
+    select,
+    open: () => store.open,
+    setOpen: (open: string[]) => {
+      const allowed = new Set(files()?.map((diff) => diff.file))
+      const next = Array.from(new Set(open.filter((file) => allowed.has(file))))
+      const selected = next.find((file) => !store.open.includes(file))
+      setStore("open", next)
+      if (selected) setStore("file", selected)
+    },
+    expanded: () => store.expanded,
+    expand: () => {
+      if (!files()?.length) return
+      setStore("expanded", true)
+    },
+    collapse: () => setStore("expanded", false),
+    enter: (stage: Exclude<PermissionStage, "permission">) => setStore("stage", stage),
+    cancel: () => setStore("stage", "permission"),
+  }
+}
+
+export type SessionPermissionController = ReturnType<typeof createSessionPermissionController>
 
 const idle = { type: "idle" as const }
 
@@ -19,7 +98,7 @@ export function createSessionComposerController() {
   const serverSDK = useServerSDK()
   const data = useData()
   const language = useLanguage()
-  const permission = usePermission()
+  const permissionContext = usePermission()
   createEffect(() => {
     const id = params.id
     if (!id || serverSDK.connection.status() !== "connected") return
@@ -36,9 +115,10 @@ export function createSessionComposerController() {
 
   const permissionRequest = createMemo((): PermissionRequest | undefined => {
     return sessionPermissionRequest(data.session.list(), data.session.permission.list, params.id, (item) => {
-      return !permission.autoResponds(item, sdk().directory)
+      return !permissionContext.autoResponds(item, sdk().directory)
     })
   })
+  const permissionState = createSessionPermissionController(permissionRequest)
 
   const blocked = createMemo(() => {
     const id = params.id
@@ -200,6 +280,7 @@ export function createSessionComposerController() {
     permissionRequest,
     permissionResponding,
     permissionSource,
+    permission: permissionState,
     background: {
       blocking: backgroundBlocking,
       tasks: backgroundTasks,
