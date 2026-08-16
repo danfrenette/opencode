@@ -302,6 +302,23 @@ describe("Permission", () => {
     }),
   )
 
+  it.effect("fails with corrective feedback when an asked permission is rejected with a message", () =>
+    Effect.gen(function* () {
+      yield* setup()
+      const { service, fiber, request } = yield* waitForRequest()
+      yield* service.reply({ requestID: request.id, reply: "reject", message: "Use another tool" })
+      const exit = yield* Fiber.await(fiber)
+
+      expect(exit._tag).toBe("Failure")
+      if (exit._tag === "Failure") {
+        const failure = exit.cause.reasons.find(Cause.isFailReason)
+        expect(failure?.error).toEqual(new Permission.CorrectedError({ feedback: "Use another tool" }))
+        expect(exit.cause.reasons.some(Cause.isDieReason)).toBe(false)
+      }
+      expect(yield* service.list()).toEqual([])
+    }),
+  )
+
   it.effect("stores and removes saved resources for a project", () =>
     Effect.gen(function* () {
       yield* setup()

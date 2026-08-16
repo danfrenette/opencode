@@ -3732,7 +3732,9 @@ describe("SessionRunnerLLM", () => {
             output: Schema.Struct({}),
             execute: () =>
               Effect.fail(new Permission.CorrectedError({ feedback: "Use another tool" })).pipe(
-                Effect.mapError(() => new Tool.Error({ message: "Use another tool" })),
+                Effect.mapError(
+                  (error) => new Tool.Error({ message: "Unable to execute corrected tool", error }),
+                ),
               ),
           },
         },
@@ -3745,6 +3747,17 @@ describe("SessionRunnerLLM", () => {
       yield* session.resume(sessionID)
 
       expect(requests).toHaveLength(2)
+      expect(requests[1]?.messages.at(-1)?.content).toMatchObject([
+        {
+          type: "tool-result",
+          id: "call-corrected",
+          name: "corrected",
+          result: {
+            type: "error",
+            value: { error: { type: "tool.execution", message: "Use another tool" } },
+          },
+        },
+      ])
       expect(yield* session.context(sessionID)).toMatchObject([
         { type: "user", text: "Call corrected" },
         {
