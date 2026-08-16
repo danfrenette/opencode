@@ -60,6 +60,29 @@ Browser-local tabs, drafts, preferences, and storage remain separate for the loc
 Set `OPENCODE_DEV_SERVER_URL` before running the command when the existing server uses another origin. The command
 never starts, stops, or restarts the backend.
 
+Use an installed `opencode2 serve` backend when changing only the web app. It exposes existing local sessions, but it
+runs the installed Core and Server code, so repository backend changes are not hot reloaded.
+
+To test Core or Server changes through the web app while retaining existing local sessions, stop the installed server
+and run the repository server against the installed channel database:
+
+```bash
+OPENCODE_DB=opencode.db \
+OPENCODE_PASSWORD="$(opencode2 service get password)" \
+bun run dev serve --hostname 127.0.0.1 --port 4097
+```
+
+Then, in another terminal:
+
+```bash
+OPENCODE_DEV_SERVER_URL=http://127.0.0.1:4097 bun run dev:web:live
+```
+
+Repository servers otherwise use a channel-specific development database and will not show sessions from the
+installed server. Do not operate the same active session through two server processes sharing `opencode.db`; run only
+one of them at a time because execution coordination is process-local. Avoid using the shared database when a branch
+contains database migrations unless you intend to migrate local installed-server data.
+
 ### Packages
 
 - `packages/schema`: shared wire and storage contracts
