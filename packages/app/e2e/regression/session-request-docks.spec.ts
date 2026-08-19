@@ -1,9 +1,10 @@
-import { base64Encode } from "@opencode-ai/core/util/encode"
+import { base64Encode } from "@opencode-ai/util/encode"
 import type {
   FormCancelled,
   FormCreated,
   FormInfo,
   FileDiffInfo,
+  OpenCodeEvent,
   PermissionAsked,
   PermissionReplied,
   PermissionRequest,
@@ -22,15 +23,7 @@ const sessionID = "ses_request_docks"
 const title = "Request dock regression"
 const server = `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`
 
-type RequestDockEvent = {
-  directory: string
-  payload:
-    | { type: SessionCreated["type"]; properties: SessionCreated["data"] }
-    | { type: PermissionAsked["type"]; properties: PermissionAsked["data"] }
-    | { type: PermissionReplied["type"]; properties: PermissionReplied["data"] }
-    | { type: FormCreated["type"]; properties: FormCreated["data"] }
-    | { type: FormCancelled["type"]; properties: FormCancelled["data"] }
-}
+type RequestDockEvent = OpenCodeEvent
 
 type SessionFixture = Pick<SessionInfo, "id" | "parentID" | "projectID" | "title" | "time"> & {
   slug: string
@@ -71,7 +64,7 @@ test("shows a pending question dock", async ({ page }) => {
       },
     ],
   })
-  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await page.goto(`/server/${base64Encode(server)}/session/${sessionID}`)
   await expectSessionTitle(page, title)
 
   const question = page.locator('[data-component="dock-prompt"][data-kind="question"]')
@@ -138,7 +131,7 @@ test("previews a pending edit without hiding permission choices", async ({ page 
       },
     ],
   })
-  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await page.goto(`/server/${base64Encode(server)}/session/${sessionID}`)
   await expectSessionTitle(page, title)
 
   const permission = page.locator('[data-component="dock-prompt"][data-kind="permission"]')
@@ -211,7 +204,7 @@ test("selects preview files without losing decision state and resets for the nex
       },
     ],
   })
-  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await page.goto(`/server/${base64Encode(server)}/session/${sessionID}`)
   await transport.waitForConnection()
   await expectSessionTitle(page, title)
 
@@ -232,11 +225,11 @@ test("selects preview files without losing decision state and resets for the nex
   await expect(feedback).toHaveValue("Keep the public API")
 
   await transport.send({
-    directory,
-    payload: {
-      type: "permission.replied",
-      properties: { sessionID, requestID: "permission-edit-multi", reply: "reject" },
-    },
+    id: "evt_permission_edit_multi",
+    created: 1,
+    type: "permission.replied",
+    location: { directory },
+    data: { sessionID, requestID: "permission-edit-multi", reply: "reject" },
   })
   await expect(permission.getByText("next new content", { exact: true })).toBeVisible()
   await expect(permission.getByRole("button", { name: "Allow once" })).toBeFocused()
@@ -274,7 +267,7 @@ test("expands pending edits into desktop review with shared selection and decisi
       },
     ],
   })
-  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await page.goto(`/server/${base64Encode(server)}/session/${sessionID}`)
   await expectSessionTitle(page, title)
 
   const compact = page.locator('[data-permission-surface="compact"]')
@@ -341,7 +334,7 @@ test("keeps permission decisions reachable in expanded mobile review", async ({ 
       },
     ],
   })
-  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await page.goto(`/server/${base64Encode(server)}/session/${sessionID}`)
   await expectSessionTitle(page, title)
 
   const permission = page.locator('[data-permission-surface="compact"]')
@@ -449,7 +442,7 @@ test("preserves expanded edit feedback after a failed reply", async ({ page }) =
   await page.route(`**/api/session/${sessionID}/permission/permission-edit-expanded-retry/reply`, (route) =>
     route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ message: "No reply" }) }),
   )
-  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await page.goto(`/server/${base64Encode(server)}/session/${sessionID}`)
   await expectSessionTitle(page, title)
 
   const compact = page.locator('[data-permission-surface="compact"]')
@@ -531,7 +524,7 @@ test("restores normal review only after authoritative permission replacement", a
       },
     ],
   })
-  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await page.goto(`/server/${base64Encode(server)}/session/${sessionID}`)
   await transport.waitForConnection()
   await expectSessionTitle(page, title)
 
@@ -559,11 +552,11 @@ test("restores normal review only after authoritative permission replacement", a
   await expect(panel.getByText("pending new", { exact: true })).toBeVisible()
 
   await transport.send({
-    directory,
-    payload: {
-      type: "permission.replied",
-      properties: { sessionID, requestID: "permission-edit-authoritative", reply: "once" },
-    },
+    id: "evt_permission_edit_authoritative",
+    created: 1,
+    type: "permission.replied",
+    location: { directory },
+    data: { sessionID, requestID: "permission-edit-authoritative", reply: "once" },
   })
 
   await expect(reviewPermission).toHaveCount(0)
@@ -608,7 +601,7 @@ test("warns for malformed edit metadata without blocking a decision", async ({ p
       },
     ],
   })
-  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await page.goto(`/server/${base64Encode(server)}/session/${sessionID}`)
   await expectSessionTitle(page, title)
 
   const permission = page.locator('[data-component="dock-prompt"][data-kind="permission"]')
@@ -669,7 +662,7 @@ test("keeps a large mobile edit preview bounded and its actions reachable", asyn
       },
     ],
   })
-  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await page.goto(`/server/${base64Encode(server)}/session/${sessionID}`)
   await expectSessionTitle(page, title)
 
   const permission = page.locator('[data-component="dock-prompt"][data-kind="permission"]')
@@ -742,7 +735,7 @@ test("confirms persistent permission and waits for authoritative removal", async
     await route.fulfill({ status: 204 })
   })
 
-  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await page.goto(`/server/${base64Encode(server)}/session/${sessionID}`)
   await transport.waitForConnection()
   await expectSessionTitle(page, title)
 
@@ -789,11 +782,11 @@ test("confirms persistent permission and waits for authoritative removal", async
   await expect(permission.getByRole("button", { name: "Confirm" })).toBeDisabled()
 
   await transport.send({
-    directory,
-    payload: {
-      type: "permission.replied",
-      properties: { sessionID, requestID: "permission-always", reply: "always" },
-    },
+    id: "evt_permission_always",
+    created: 1,
+    type: "permission.replied",
+    location: { directory },
+    data: { sessionID, requestID: "permission-always", reply: "always" },
   })
   await expect(permission.getByText("pwd", { exact: true })).toBeVisible()
   await expect(permission.getByRole("button", { name: "Allow once" })).toBeEnabled()
@@ -838,45 +831,46 @@ test("denies a child permission with corrective feedback without leaving the par
     sessionStatus: { [childID]: { type: "busy" } },
   })
 
-  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await page.goto(`/server/${base64Encode(server)}/session/${sessionID}`)
   await transport.waitForConnection()
   await expectSessionTitle(page, title)
   await transport.send({
-    directory,
-    payload: {
-      type: "session.created",
-      properties: {
-        sessionID: childID,
-        parentID: sessionID,
-        slug: "permission-child",
-        projectID,
-        location: { directory },
-        title: "Research subagent",
-        version: "dev",
-        agent: "general",
-      },
+    id: "evt_session_created",
+    created: 1,
+    durable: { aggregateID: childID, seq: 1, version: 1 },
+    type: "session.created",
+    location: { directory },
+    data: {
+      sessionID: childID,
+      parentID: sessionID,
+      slug: "permission-child",
+      projectID,
+      location: { directory },
+      title: "Research subagent",
+      version: "dev",
+      agent: "general",
     },
   })
   await transport.send({
-    directory,
-    payload: {
-      type: "permission.asked",
-      properties: {
-        id: "permission-child-reject",
-        sessionID: childID,
-        action: "edit",
-        resources: ["src/child.ts"],
-        metadata: {
-          files: [
-            {
-              file: "src/child.ts",
-              patch: "@@ -1 +1 @@\n-child old content\n+child new content\n",
-              additions: 1,
-              deletions: 1,
-              status: "modified",
-            },
-          ],
-        },
+    id: "evt_permission_child",
+    created: 1,
+    type: "permission.asked",
+    location: { directory },
+    data: {
+      id: "permission-child-reject",
+      sessionID: childID,
+      action: "edit",
+      resources: ["src/child.ts"],
+      metadata: {
+        files: [
+          {
+            file: "src/child.ts",
+            patch: "@@ -1 +1 @@\n-child old content\n+child new content\n",
+            additions: 1,
+            deletions: 1,
+            status: "modified",
+          },
+        ],
       },
     },
   })
@@ -939,7 +933,7 @@ test("allows empty rejection feedback and preserves feedback after a failed repl
     await route.fulfill({ status: 204 })
   })
 
-  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await page.goto(`/server/${base64Encode(server)}/session/${sessionID}`)
   await expectSessionTitle(page, title)
 
   const permission = page.locator('[data-component="dock-prompt"][data-kind="permission"]')
@@ -969,7 +963,7 @@ test("restores the draft caret before typing after a request dock closes", async
     retry: 20,
   })
   await mockServer(page, { forms: [] })
-  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  await page.goto(`/server/${base64Encode(server)}/session/${sessionID}`)
   await transport.waitForConnection()
   await expectSessionTitle(page, title)
 
@@ -992,11 +986,12 @@ test("restores the draft caret before typing after a request dock closes", async
     )
     .toBe(cursor)
   await transport.send({
-    directory,
-    payload: {
-      type: "form.created",
-      properties: {
-        form: {
+    id: "evt_form_created",
+    created: 1,
+    type: "form.created",
+    location: { directory },
+    data: {
+      form: {
           id: "frm_question_caret",
           sessionID,
           title: "Questions",
@@ -1011,7 +1006,6 @@ test("restores the draft caret before typing after a request dock closes", async
               custom: true,
             },
           ],
-        },
       },
     },
   })
@@ -1020,11 +1014,11 @@ test("restores the draft caret before typing after a request dock closes", async
   await expect(editor).toHaveCount(0)
 
   await transport.send({
-    directory,
-    payload: {
-      type: "form.cancelled",
-      properties: { sessionID, id: "frm_question_caret" },
-    },
+    id: "evt_form_cancelled",
+    created: 2,
+    type: "form.cancelled",
+    location: { directory },
+    data: { sessionID, id: "frm_question_caret" },
   })
   await expect(question).toHaveCount(0)
   await expect(editor).toBeVisible()

@@ -49,7 +49,6 @@ benchmark.describe("performance: review pane scaling", () => {
         await setupTimelineBenchmark(page, {
           historyTurns: 0,
           eventBatch: 1,
-          newLayoutDesigns: true,
           vcsDiff: diffs,
         })
 
